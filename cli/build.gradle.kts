@@ -48,4 +48,9 @@ application {
 
 dependencies {
     implementation(libs.clikt)
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

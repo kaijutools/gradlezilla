@@ -12,7 +12,7 @@ class Version : CliktCommand(
         echo(makeVersion())
     }
 
-    private fun makeVersion(): String {
+    internal fun makeVersion(): String {
         val semver = BuildConfig.VERSION
         val sha = BuildConfig.COMMIT_SHA
         val versionString = "Current version: $semver - $sha"
