@@ -9,7 +9,7 @@ sl4j = "2.0.17"
 [libraries]
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
 gradle-tooling = { module = "org.gradle:gradle-tooling-api", version.ref = "toolingApi" }
-sl4j = { module = "org.sl4j:sl4j-simple", version.ref = "sl4j" }
+sl4j = { module = "org.slf4j:slf4j-simple", version.ref = "sl4j" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
