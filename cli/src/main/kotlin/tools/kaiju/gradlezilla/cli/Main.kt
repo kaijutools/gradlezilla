@@ -1,22 +1,15 @@
 package tools.kaiju.gradlezilla.cli
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.versionOption
-import com.github.ajalt.mordant.terminal.Terminal
+import com.github.ajalt.clikt.core.subcommands
 
 class Main : CliktCommand(
     help = "Dockerfile generator for Android",
     name = "gradlezilla",
 ) {
-    init {
-        versionOption("${BuildConfig.VERSION} (${BuildConfig.COMMIT_SHA})")
-    }
-
-    private val terminal = Terminal()
-
-    override fun run() {
-        terminal.println("rawwwwrrr!!!")
-    }
+    override fun run() = Unit
 }
 
-fun main(args: Array<String>) = Main().main(args)
+fun main(args: Array<String>) = Main()
+    .subcommands(Version())
+    .main(args)
