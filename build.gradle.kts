@@ -6,6 +6,7 @@ plugins {
 
 allprojects {
     repositories {
+        maven { url = uri("https://repo.gradle.org/gradle/libs-releases") }
         mavenCentral()
     }
 }
