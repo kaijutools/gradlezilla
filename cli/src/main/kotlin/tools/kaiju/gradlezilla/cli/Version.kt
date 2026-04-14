@@ -3,9 +3,7 @@ package tools.kaiju.gradlezilla.cli
 import com.github.ajalt.clikt.core.CliktCommand
 
 class Version : CliktCommand(
-    help = """
-        Shows version information about the current version.
-    """.trimIndent(),
+    help = "Shows version information about the current version.",
     name = "version",
 ) {
     override fun run() {

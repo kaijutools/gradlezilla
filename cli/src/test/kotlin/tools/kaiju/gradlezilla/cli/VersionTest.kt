@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class VersionTest {
-
     @Test
     fun `makeVersion returns expected format`() {
         val result = Version().makeVersion()

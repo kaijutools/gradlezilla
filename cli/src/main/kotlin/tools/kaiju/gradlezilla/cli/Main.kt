@@ -10,6 +10,4 @@ class Main : CliktCommand(
     override fun run() = Unit
 }
 
-fun main(args: Array<String>) = Main()
-    .subcommands(Version())
-    .main(args)
+fun main(args: Array<String>) = Main().subcommands(Version()).main(args)
