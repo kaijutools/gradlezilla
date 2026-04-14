@@ -3,9 +3,9 @@ package tools.kaiju.gradlezilla.cli
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.mordant.terminal.Terminal
 
-class Gradlezilla : CliktCommand(
+class Main : CliktCommand(
     help = "Dockerfile generator for Android",
-    name = "gradlezilla"
+    name = "gradlezilla",
 ) {
     private val terminal = Terminal()
 
@@ -14,4 +14,4 @@ class Gradlezilla : CliktCommand(
     }
 }
 
-fun main(args: Array<String>) = Gradlezilla().main(args)
+fun main(args: Array<String>) = Main().main(args)
