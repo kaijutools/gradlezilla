@@ -9,8 +9,13 @@ class Version : CliktCommand(
     name = "version",
 ) {
     override fun run() {
+        echo(makeVersion())
+    }
+
+    private fun makeVersion(): String {
         val semver = BuildConfig.VERSION
         val sha = BuildConfig.COMMIT_SHA
-        echo("Current version: $semver - $sha")
+        val versionString = "Current version: $semver - $sha"
+        return versionString
     }
 }
