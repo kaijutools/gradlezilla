@@ -15,6 +15,7 @@ data class Version(
     val literal: String? = null,
 )
 
+@Suppress("UnusedPrivateProperty", "MagicNumber")
 object VersionSerializer : KSerializer<Version> {
     override val descriptor: SerialDescriptor =
         buildClassSerialDescriptor("Version") {
@@ -28,7 +29,7 @@ object VersionSerializer : KSerializer<Version> {
         try {
             val stringValue = decoder.decodeString()
             Version(literal = stringValue)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             val composite = decoder.beginStructure(descriptor)
             var ref: String? = null
             var literal: String? = null

@@ -28,12 +28,12 @@ class VersionCatalogExtractor : AgpDataExtractor {
             val buildToolsVersion = BUILD_TOOLS_KEYS.firstNotNullOfOrNull { versions[it] }
             val ndkVersion = NDK_KEYS.firstNotNullOfOrNull { versions[it] }
 
-            return AgpData(
+            AgpData(
                 compileSdk = compileSdk,
                 buildToolsVersion = buildToolsVersion,
                 ndkVersion = ndkVersion,
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -52,8 +52,6 @@ class VersionCatalogExtractor : AgpDataExtractor {
                 deserializer = serializer(),
                 tomlFilePath = catalogFile.absolutePath,
             )
-
-        println("Parsed version catalog from $catalogFile to $versionCatalog")
 
         return versionCatalog.versions
     }
