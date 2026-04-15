@@ -92,9 +92,13 @@ class GradleProjectInspector(
     @Throws(GradleInspectorException::class)
     internal fun executeExtractionChain(): AgpData {
         for (extractor in extractors) {
-            val result = extractor.extract(projectDir)
-            if (result != null) {
-                return result
+            try {
+                val result = extractor.extract(projectDir)
+                if (result != null) {
+                    return result
+                }
+            } catch (e: AgpDataExtractionException) {
+                println("Failed to extract $projectDir: ${e.message}")
             }
         }
 
