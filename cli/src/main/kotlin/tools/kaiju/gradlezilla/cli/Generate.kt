@@ -20,6 +20,6 @@ class Generate :
     )
 
     override fun run() {
-        echo("do the dew")
+        echo("do the dew in $projectDir")
     }
 }
