@@ -4,13 +4,19 @@ import org.gradle.tooling.GradleConnectionException
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.model.GradleProject
 import org.gradle.tooling.model.build.BuildEnvironment
-import tools.kaiju.gradlezilla.models.AndroidProjectSpec
-import tools.kaiju.gradlezilla.models.ModuleSpec
+import tools.kaiju.gradlezilla.models.*
 import java.io.File
 
 class GradleProjectInspector(
     private val projectDir: File,
 ) {
+    private val extractors: List<AgpDataExtractor> =
+        listOf(
+            VersionCatalogExtractor(),
+            StaticBuildFileExtractor(),
+            InitScriptExtractor(),
+        )
+
     fun targets(): List<BuildTarget> {
         validateGradleProject()
         try {
@@ -37,61 +43,63 @@ class GradleProjectInspector(
 
     fun inspect(): AndroidProjectSpec {
         validateGradleProject()
-        val versions = parseVersionCatalog()
-        val compileSdk =
-            COMPILE_SDK_KEYS.firstNotNullOfOrNull { versions[it]?.toIntOrNull() }
-                ?: throw NotAnAndroidProjectException(
-                    "Could not determine compileSdk for project at '$projectDir' — " +
-                        "no compileSdk entry found in gradle/libs.versions.toml",
-                )
-        val buildToolsVersion = BUILD_TOOLS_KEYS.firstNotNullOfOrNull { versions[it] }
-        val ndkVersion = NDK_KEYS.firstNotNullOfOrNull { versions[it] }
+
+        val env = fetchEnvironment()
+
+        val agpData = executeExtractionChain()
+
+        return AndroidProjectSpec(
+            jdkVersion = env.jdkVersion,
+            gradleVersion = env.gradleVersion,
+            androidSdkVersion = agpData.compileSdk,
+            androidPlatformToolsVersion = agpData.buildToolsVersion,
+            androidNdkVersion = agpData.ndkVersion,
+        )
+    }
+
+    @Throws(GradleInspectorException::class)
+    internal fun fetchEnvironment(): GradleProjectEnvironment {
+        val hasBuildSrc = File(projectDir, "buildSrc").isDirectory
+        val hasBuildLogic = File(projectDir, "build-logic").isDirectory
+
         try {
             GradleConnector
                 .newConnector()
                 .forProjectDirectory(projectDir)
                 .connect()
                 .use { connection ->
+                    val buildEnv = connection.getModel(BuildEnvironment::class.java)
+
                     val gradleProject = connection.getModel(GradleProject::class.java)
-                    val env = connection.getModel(BuildEnvironment::class.java)
-                    return AndroidProjectSpec(
-                        jdkVersion = jdkMajorVersion(env.java.javaHome),
-                        androidSdkVersion = compileSdk,
-                        androidPlatformToolsVersion = buildToolsVersion,
-                        androidNdkVersion = ndkVersion,
-                        gradleVersion = env.gradle.gradleVersion,
-                        gradleJvmArgs = env.java.jvmArguments.joinToString(" ").takeIf { it.isNotBlank() },
+
+                    return GradleProjectEnvironment(
+                        jdkVersion = jdkMajorVersion(buildEnv.java.javaHome),
+                        gradleVersion = buildEnv.gradle.gradleVersion,
+                        gradleJvmArgs =
+                            buildEnv.java.jvmArguments
+                                .joinToString(" ")
+                                .takeIf { it.isNotBlank() },
                         modules = collectModules(gradleProject),
-                        hasBuildSrc = File(projectDir, "buildSrc").isDirectory,
-                        hasBuildLogic = File(projectDir, "build-logic").isDirectory,
+                        hasBuildSrc = hasBuildSrc,
+                        hasBuildLogic = hasBuildLogic,
                     )
                 }
         } catch (e: GradleConnectionException) {
-            throw GradleInspectorException("Could not connect to Gradle project at '$projectDir': ${e.message}", e)
+            throw GradleInspectorException("Could not connect to $projectDir: ${e.message}", e)
         }
     }
 
-    // ── Version catalog parsing ───────────────────────────────────────────
-
-    private fun parseVersionCatalog(): Map<String, String> {
-        val catalog = File(projectDir, "gradle/libs.versions.toml").takeIf { it.exists() } ?: return emptyMap()
-        val result = mutableMapOf<String, String>()
-        var inVersions = false
-        for (line in catalog.readLines()) {
-            val trimmed = line.trim()
-            when {
-                trimmed == "[versions]" -> inVersions = true
-                trimmed.startsWith("[") -> inVersions = false
-                inVersions && !trimmed.startsWith("#") && trimmed.contains("=") -> {
-                    val (rawKey, rawValue) = trimmed.split("=", limit = 2)
-                    result[rawKey.trim()] = rawValue.trim().trim('"')
-                }
+    @Throws(GradleInspectorException::class)
+    internal fun executeExtractionChain(): AgpData {
+        for (extractor in extractors) {
+            val result = extractor.extract(projectDir)
+            if (result != null) {
+                return result
             }
         }
-        return result
-    }
 
-    // ── Tooling API helpers ───────────────────────────────────────────────
+        throw GradleInspectorException("Could not extract Android projects from $projectDir")
+    }
 
     private fun collectModules(project: GradleProject): List<ModuleSpec> =
         project.children.flatMap { child ->
@@ -124,8 +132,5 @@ class GradleProjectInspector(
     private companion object {
         const val DEFAULT_JDK_VERSION = 17
         val SETTINGS_FILES = listOf("settings.gradle.kts", "settings.gradle")
-        val COMPILE_SDK_KEYS = listOf("compileSdk", "compile-sdk", "compileSdkVersion", "compile_sdk")
-        val BUILD_TOOLS_KEYS = listOf("buildTools", "buildToolsVersion", "build-tools", "build_tools")
-        val NDK_KEYS = listOf("ndk", "ndkVersion", "ndk-version", "ndk_version", "androidNdk")
     }
 }
