@@ -1,6 +1,6 @@
-package tools.kaiju.gradlezilla.generator
+package tools.kaiju.gradlezilla.models
 
-data class GeneratorSpec(
+data class AndroidProjectSpec(
     val jdkVersion: Int = 17,
     val androidSdkVersion: Int,
     val androidPlatformToolsVersion: String,

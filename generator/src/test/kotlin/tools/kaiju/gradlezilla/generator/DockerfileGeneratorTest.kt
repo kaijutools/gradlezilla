@@ -1,5 +1,7 @@
 package tools.kaiju.gradlezilla.generator
 
+import tools.kaiju.gradlezilla.models.AndroidProjectSpec
+import tools.kaiju.gradlezilla.models.ModuleSpec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,14 +11,14 @@ class DockerfileGeneratorTest {
     private val generator = DockerfileGenerator()
 
     private val baseSpec =
-        GeneratorSpec(
+        AndroidProjectSpec(
             jdkVersion = 17,
             androidSdkVersion = 34,
             androidPlatformToolsVersion = "34.0.5",
             androidCommandLineToolsVersion = "11076708",
         )
 
-    private fun render(spec: GeneratorSpec = baseSpec): String = generator.generate(spec).render()
+    private fun render(spec: AndroidProjectSpec = baseSpec): String = generator.generate(spec).render()
 
     // ── Dockerfile structure ──────────────────────────────────────────────
 
