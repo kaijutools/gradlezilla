@@ -3,7 +3,7 @@ package tools.kaiju.gradlezilla.models
 data class AndroidProjectSpec(
     val jdkVersion: Int = 17,
     val androidSdkVersion: Int,
-    val androidPlatformToolsVersion: String,
+    val androidPlatformToolsVersion: String? = null,
     val androidCommandLineToolsVersion: String? = null,
     val androidNdkVersion: String? = null,
     val androidCmakeVersion: String? = null,

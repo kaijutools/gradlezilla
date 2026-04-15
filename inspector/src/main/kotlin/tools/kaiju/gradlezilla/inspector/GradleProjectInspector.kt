@@ -1,9 +1,7 @@
 package tools.kaiju.gradlezilla.inspector
 
-import com.android.builder.model.AndroidProject
 import org.gradle.tooling.GradleConnectionException
 import org.gradle.tooling.GradleConnector
-import org.gradle.tooling.UnknownModelException
 import org.gradle.tooling.model.GradleProject
 import org.gradle.tooling.model.build.BuildEnvironment
 import tools.kaiju.gradlezilla.models.AndroidProjectSpec
@@ -39,6 +37,15 @@ class GradleProjectInspector(
 
     fun inspect(): AndroidProjectSpec {
         validateGradleProject()
+        val versions = parseVersionCatalog()
+        val compileSdk =
+            COMPILE_SDK_KEYS.firstNotNullOfOrNull { versions[it]?.toIntOrNull() }
+                ?: throw NotAnAndroidProjectException(
+                    "Could not determine compileSdk for project at '$projectDir' — " +
+                        "no compileSdk entry found in gradle/libs.versions.toml",
+                )
+        val buildToolsVersion = BUILD_TOOLS_KEYS.firstNotNullOfOrNull { versions[it] }
+        val ndkVersion = NDK_KEYS.firstNotNullOfOrNull { versions[it] }
         try {
             GradleConnector
                 .newConnector()
@@ -47,14 +54,11 @@ class GradleProjectInspector(
                 .use { connection ->
                     val gradleProject = connection.getModel(GradleProject::class.java)
                     val env = connection.getModel(BuildEnvironment::class.java)
-                    val (androidProject, compileSdk) = resolveAndroidModel(connection)
-
                     return AndroidProjectSpec(
                         jdkVersion = jdkMajorVersion(env.java.javaHome),
                         androidSdkVersion = compileSdk,
-                        androidPlatformToolsVersion = androidProject.buildToolsVersion,
-                        // ndkVersion not surfaced by builder-model API; use a BuildAction to extend
-                        androidNdkVersion = null,
+                        androidPlatformToolsVersion = buildToolsVersion,
+                        androidNdkVersion = ndkVersion,
                         gradleVersion = env.gradle.gradleVersion,
                         gradleJvmArgs = env.java.jvmArguments.joinToString(" ").takeIf { it.isNotBlank() },
                         modules = collectModules(gradleProject),
@@ -67,34 +71,27 @@ class GradleProjectInspector(
         }
     }
 
-    private fun resolveAndroidModel(connection: org.gradle.tooling.ProjectConnection): Pair<AndroidProject, Int> {
-        val androidProject =
-            try {
-                connection.getModel(AndroidProject::class.java)
-            } catch (e: UnknownModelException) {
-                throw NotAnAndroidProjectException(
-                    "Project at '$projectDir' does not apply the Android Gradle Plugin",
-                    e,
-                )
+    // ── Version catalog parsing ───────────────────────────────────────────
+
+    private fun parseVersionCatalog(): Map<String, String> {
+        val catalog = File(projectDir, "gradle/libs.versions.toml").takeIf { it.exists() } ?: return emptyMap()
+        val result = mutableMapOf<String, String>()
+        var inVersions = false
+        for (line in catalog.readLines()) {
+            val trimmed = line.trim()
+            when {
+                trimmed == "[versions]" -> inVersions = true
+                trimmed.startsWith("[") -> inVersions = false
+                inVersions && !trimmed.startsWith("#") && trimmed.contains("=") -> {
+                    val (rawKey, rawValue) = trimmed.split("=", limit = 2)
+                    result[rawKey.trim()] = rawValue.trim().trim('"')
+                }
             }
-        val compileSdk =
-            androidProject.compileTarget
-                .removePrefix("android-")
-                .toIntOrNull()
-                ?: throw GradleInspectorException(
-                    "Unrecognised compileTarget '${androidProject.compileTarget}'",
-                )
-        return androidProject to compileSdk
+        }
+        return result
     }
 
-    private fun validateGradleProject() {
-        val hasSettingsFile = SETTINGS_FILES.any { File(projectDir, it).exists() }
-        if (!hasSettingsFile) {
-            throw NotAGradleProjectException(
-                "No Gradle settings file found in '$projectDir' — expected one of: ${SETTINGS_FILES.joinToString()}",
-            )
-        }
-    }
+    // ── Tooling API helpers ───────────────────────────────────────────────
 
     private fun collectModules(project: GradleProject): List<ModuleSpec> =
         project.children.flatMap { child ->
@@ -115,8 +112,20 @@ class GradleProjectInspector(
         return if (parts[0] == "1") parts[1].toInt() else parts[0].toInt()
     }
 
+    private fun validateGradleProject() {
+        val hasSettingsFile = SETTINGS_FILES.any { File(projectDir, it).exists() }
+        if (!hasSettingsFile) {
+            throw NotAGradleProjectException(
+                "No Gradle settings file found in '$projectDir' — expected one of: ${SETTINGS_FILES.joinToString()}",
+            )
+        }
+    }
+
     private companion object {
         const val DEFAULT_JDK_VERSION = 17
         val SETTINGS_FILES = listOf("settings.gradle.kts", "settings.gradle")
+        val COMPILE_SDK_KEYS = listOf("compileSdk", "compile-sdk", "compileSdkVersion", "compile_sdk")
+        val BUILD_TOOLS_KEYS = listOf("buildTools", "buildToolsVersion", "build-tools", "build_tools")
+        val NDK_KEYS = listOf("ndk", "ndkVersion", "ndk-version", "ndk_version", "androidNdk")
     }
 }
