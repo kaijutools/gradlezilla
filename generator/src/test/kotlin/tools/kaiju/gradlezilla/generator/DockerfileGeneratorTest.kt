@@ -4,6 +4,7 @@ import tools.kaiju.gradlezilla.models.AndroidProjectSpec
 import tools.kaiju.gradlezilla.models.ModuleSpec
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -19,6 +20,15 @@ class DockerfileGeneratorTest {
         )
 
     private fun render(spec: AndroidProjectSpec = baseSpec): String = generator.generate(spec).render()
+
+    // ── generate() preconditions ──────────────────────────────────────────
+
+    @Test
+    fun `generate throws when androidCommandLineToolsVersion is null`() {
+        assertFailsWith<IllegalArgumentException> {
+            generator.generate(baseSpec.copy(androidCommandLineToolsVersion = null))
+        }
+    }
 
     // ── Dockerfile structure ──────────────────────────────────────────────
 

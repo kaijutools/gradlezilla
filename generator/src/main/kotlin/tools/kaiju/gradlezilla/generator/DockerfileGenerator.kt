@@ -3,8 +3,12 @@ package tools.kaiju.gradlezilla.generator
 import tools.kaiju.gradlezilla.models.AndroidProjectSpec
 
 class DockerfileGenerator : Generator {
-    override fun generate(spec: AndroidProjectSpec): Dockerfile =
-        Dockerfile(
+    override fun generate(spec: AndroidProjectSpec): Dockerfile {
+        requireNotNull(spec.androidCommandLineToolsVersion) {
+            "androidCommandLineToolsVersion must be set before generating a Dockerfile — " +
+                "it cannot be introspected from the project and must be provided explicitly"
+        }
+        return Dockerfile(
             layers =
                 listOf(
                     headerComment(spec),
@@ -17,6 +21,7 @@ class DockerfileGenerator : Generator {
                     build(),
                 ),
         )
+    }
 
     // ── L1: Base image ───────────────────────────────────────────────────
 

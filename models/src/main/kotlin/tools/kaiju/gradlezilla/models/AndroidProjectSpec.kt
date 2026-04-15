@@ -4,7 +4,7 @@ data class AndroidProjectSpec(
     val jdkVersion: Int = 17,
     val androidSdkVersion: Int,
     val androidPlatformToolsVersion: String,
-    val androidCommandLineToolsVersion: String,
+    val androidCommandLineToolsVersion: String? = null,
     val androidNdkVersion: String? = null,
     val androidCmakeVersion: String? = null,
     val gradleVersion: String? = null,

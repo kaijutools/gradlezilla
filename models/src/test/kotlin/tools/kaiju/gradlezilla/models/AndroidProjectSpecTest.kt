@@ -28,6 +28,12 @@ class AndroidProjectSpecTest {
     }
 
     @Test
+    fun `androidCommandLineToolsVersion is null when not provided`() {
+        val spec = AndroidProjectSpec(androidSdkVersion = 34, androidPlatformToolsVersion = "34.0.5")
+        assertNull(spec.androidCommandLineToolsVersion)
+    }
+
+    @Test
     fun `androidNdkVersion is null when not provided`() {
         assertNull(baseSpec.androidNdkVersion)
     }
