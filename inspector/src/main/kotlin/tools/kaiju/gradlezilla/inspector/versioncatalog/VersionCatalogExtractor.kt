@@ -1,4 +1,4 @@
-package tools.kaiju.gradlezilla.inspector
+package tools.kaiju.gradlezilla.inspector.versioncatalog
 
 import com.akuleshov7.ktoml.file.TomlFileReader
 import kotlinx.serialization.serializer
