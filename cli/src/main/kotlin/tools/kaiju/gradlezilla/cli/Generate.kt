@@ -22,6 +22,7 @@ class Generate :
         canBeDir = true,
     )
 
+    @Suppress("SwallowedException")
     override fun run() {
         val inspection =
             try {
