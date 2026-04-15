@@ -35,7 +35,7 @@ jobs:
       - name: Run Gradlezilla
         id: run-cli
         run: |
-          if ./gradlew :cli:run --args="generate target-repo"; then
+          if ./gradlew :cli:run --args="generate $PWD/target-repo"; then
             echo "status=✅ Success" >> $GITHUB_OUTPUT
           else
             echo "status=❌ Failed" >> $GITHUB_OUTPUT
