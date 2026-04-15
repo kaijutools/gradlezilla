@@ -1,8 +1,11 @@
 package tools.kaiju.gradlezilla.cli
 
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.types.file
+import tools.kaiju.gradlezilla.inspector.GradleInspectorException
+import tools.kaiju.gradlezilla.inspector.GradleProjectInspector
 import java.io.File
 
 class Generate :
@@ -20,6 +23,13 @@ class Generate :
     )
 
     override fun run() {
-        echo("do the dew in $projectDir")
+        val inspection =
+            try {
+                GradleProjectInspector(projectDir).inspect()
+            } catch (e: GradleInspectorException) {
+                throw UsageError(e.message ?: "Could not connect to Gradle Project at '$projectDir'.")
+            }
+
+        echo("inspection = $inspection")
     }
 }

@@ -50,6 +50,7 @@ application {
 
 dependencies {
     implementation(libs.clikt)
+    implementation(project(":models"))
     implementation(project(":inspector"))
     testImplementation(kotlin("test"))
 }
