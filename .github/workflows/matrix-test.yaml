@@ -18,6 +18,8 @@ jobs:
           - { name: 'Sunflower', url: 'https://github.com/android/sunflower.git'}
           - { name: 'Now In Android', url: 'https://github.com/android/nowinandroid.git'}
           - { name: 'Timber', url: 'https://github.com/JakeWharton/timber.git'}
+          - { name: 'Signal', url: 'https://github.com/signalapp/Signal-Android.git' }
+          - { name: 'Wikipedia', url: 'https://github.com/wikimedia/apps-android-wikipedia.git' }
 
     steps:
       - name: Checkout Gradlezilla
