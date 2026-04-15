@@ -3,9 +3,13 @@ kotlin = "2.0.0"
 clikt = "4.2.2"
 ktlint-gradle = "12.1.1"
 detekt = "1.23.7"
+toolingApi = "9.4.1"
+sl4j = "2.0.17"
 
 [libraries]
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
+gradle-tooling = { module = "org.gradle:gradle-tooling-api", version.ref = "toolingApi" }
+sl4j = { module = "org.slf4j:slf4j-simple", version.ref = "sl4j" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

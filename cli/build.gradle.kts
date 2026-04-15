@@ -8,9 +8,11 @@ plugins {
 version = "0.1.0"
 
 val gitSha: Provider<String> =
-    providers.exec {
-        commandLine("git", "rev-parse", "--short", "HEAD")
-    }.standardOutput.asText.map { it.trim() }
+    providers
+        .exec {
+            commandLine("git", "rev-parse", "--short", "HEAD")
+        }.standardOutput.asText
+        .map { it.trim() }
 
 val generateBuildConfig by tasks.registering {
     val outputDir = layout.buildDirectory.dir("generated/source/buildConfig/main/kotlin")
@@ -48,6 +50,7 @@ application {
 
 dependencies {
     implementation(libs.clikt)
+    implementation(project(":inspector"))
     testImplementation(kotlin("test"))
 }
 

@@ -95,6 +95,36 @@ dependencies {
 }
 ```
 
+### Adding a new module
+
+1. Create `<module>/build.gradle.kts` and apply the standard plugins:
+
+```kotlin
+plugins {
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ktlint)
+    alias(libs.plugins.detekt)
+}
+```
+
+2. Create the source directory following the package naming convention:
+   `<module>/src/main/kotlin/tools/kaiju/gradlezilla/<module>/`
+
+3. Register the module in `settings.gradle.kts`:
+
+```kotlin
+include(":<module>")
+```
+
+4. If `:cli` (or another module) depends on it, add a project dependency:
+
+```kotlin
+// cli/build.gradle.kts
+dependencies {
+    implementation(project(":<module>"))
+}
+```
+
 ### Package naming
 
 All source lives under `tools.kaiju.gradlezilla.<module>` (e.g., `tools.kaiju.gradlezilla.cli`).
