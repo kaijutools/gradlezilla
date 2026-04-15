@@ -36,10 +36,10 @@ class DockerfileGenerator {
 
     private fun baseImage(spec: GeneratorSpec) =
         DockerLayer {
-            buildString {
-                appendLine("# ── L1: Base JDK ─────────────────────────────────────────────────")
-                appendLine("FROM eclipse-temurin:${spec.jdkVersion}-jdk-jammy AS base")
-            }
+            """
+            # ── L1: Base JDK ─────────────────────────────────────────────────
+            FROM eclipse-temurin:${spec.jdkVersion}-jdk-jammy AS base
+            """.trimIndent() + "\n"
         }
 
     private fun envVars(spec: GeneratorSpec) =
@@ -111,16 +111,16 @@ class DockerfileGenerator {
 
     private fun gradleWrapper() =
         DockerLayer {
-            buildString {
-                appendLine("# ── L4: Gradle wrapper ───────────────────────────────────────────")
-                appendLine("# Cached until gradle-wrapper.properties changes.")
-                appendLine("WORKDIR /app")
-                appendLine("COPY gradle/wrapper/ gradle/wrapper/")
-                appendLine("COPY gradlew ./")
-                appendLine("RUN chmod +x gradlew \\")
-                appendLine("    && --mount=type=cache,target=/root/.gradle/wrapper \\")
-                appendLine("       ./gradlew --version")
-            }
+            """
+            # ── L4: Gradle wrapper ───────────────────────────────────────────
+            # Cached until gradle-wrapper.properties changes.
+            WORKDIR /app
+            COPY gradle/wrapper/ gradle/wrapper/
+            COPY gradlew ./
+            RUN --mount=type=cache,target=/root/.gradle/wrapper \
+                chmod +x gradlew \
+                && ./gradlew --version
+            """.trimIndent() + "\n"
         }
 
     // ── L5: Dependency resolution (changes per dep change) ───────────────
@@ -162,12 +162,12 @@ class DockerfileGenerator {
 
     private fun build() =
         DockerLayer {
-            buildString {
-                appendLine("# ── L6: Build ────────────────────────────────────────────────────")
-                appendLine("COPY . .")
-                appendLine("RUN --mount=type=cache,target=/root/.gradle/caches \\")
-                appendLine("    --mount=type=cache,target=/root/.gradle/wrapper \\")
-                appendLine("    ./gradlew assembleRelease --no-configuration-cache")
-            }
+            """
+            # ── L6: Build ────────────────────────────────────────────────────
+            COPY . .
+            RUN --mount=type=cache,target=/root/.gradle/caches \
+                --mount=type=cache,target=/root/.gradle/wrapper \
+                ./gradlew assembleRelease --no-configuration-cache
+            """.trimIndent() + "\n"
         }
 }
