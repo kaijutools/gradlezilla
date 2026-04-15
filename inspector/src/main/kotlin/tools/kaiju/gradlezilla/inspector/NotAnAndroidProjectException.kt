@@ -1,6 +1,6 @@
 package tools.kaiju.gradlezilla.inspector
 
-open class GradleInspectorException(
+class NotAnAndroidProjectException(
     message: String,
     cause: Throwable? = null,
-) : Exception(message, cause)
+) : GradleInspectorException(message, cause)

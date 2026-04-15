@@ -1,12 +1,12 @@
-package tools.kaiju.gradlezilla.generator
+package tools.kaiju.gradlezilla.models
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-class GeneratorSpecTest {
+class AndroidProjectSpecTest {
     private val baseSpec =
-        GeneratorSpec(
+        AndroidProjectSpec(
             androidSdkVersion = 34,
             androidPlatformToolsVersion = "34.0.5",
             androidCommandLineToolsVersion = "11076708",
@@ -15,7 +15,7 @@ class GeneratorSpecTest {
     @Test
     fun `required fields are stored correctly`() {
         val spec =
-            GeneratorSpec(
+            AndroidProjectSpec(
                 jdkVersion = 17,
                 androidSdkVersion = 34,
                 androidPlatformToolsVersion = "34.0.5",
@@ -25,6 +25,12 @@ class GeneratorSpecTest {
         assertEquals(34, spec.androidSdkVersion)
         assertEquals("34.0.5", spec.androidPlatformToolsVersion)
         assertEquals("11076708", spec.androidCommandLineToolsVersion)
+    }
+
+    @Test
+    fun `androidCommandLineToolsVersion is null when not provided`() {
+        val spec = AndroidProjectSpec(androidSdkVersion = 34, androidPlatformToolsVersion = "34.0.5")
+        assertNull(spec.androidCommandLineToolsVersion)
     }
 
     @Test

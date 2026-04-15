@@ -1,4 +1,4 @@
-package tools.kaiju.gradlezilla.generator
+package tools.kaiju.gradlezilla.models
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,7 +17,6 @@ class ModuleSpecTest {
 
     @Test
     fun `isApplication defaults to false`() {
-        val spec = ModuleSpec(path = ":core:network")
-        assertTrue(!spec.isApplication)
+        assertTrue(!ModuleSpec(path = ":core:network").isApplication)
     }
 }

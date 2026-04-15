@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation(libs.gradle.tooling)
     implementation(libs.sl4j)
+    implementation(project(":models"))
     testImplementation(kotlin("test"))
 }
 

@@ -1,4 +1,4 @@
-package tools.kaiju.gradlezilla.generator
+package tools.kaiju.gradlezilla.models
 
 data class ModuleSpec(
     val path: String,
