@@ -1,5 +1,7 @@
 package tools.kaiju.gradlezilla.inspector
 
+import com.akuleshov7.ktoml.file.TomlFileReader
+import kotlinx.serialization.serializer
 import tools.kaiju.gradlezilla.models.AgpData
 import tools.kaiju.gradlezilla.models.AgpDataExtractionException
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
@@ -29,27 +31,18 @@ class VersionCatalogExtractor : AgpDataExtractor {
     }
 
     private fun parseVersionCatalog(projectDir: File): Map<String, String> {
-        val catalog = File(projectDir, "gradle/libs.versions.toml").takeIf { it.exists() } ?: return emptyMap()
-        val result = mutableMapOf<String, String>()
-        var inVersions = false
-        for (line in catalog.readLines()) {
-            val trimmed = line.trim()
-            when {
-                trimmed == "[versions]" -> {
-                    inVersions = true
-                }
+        val catalogFile = File(projectDir, "gradle/libs.versions.toml")
+        if (!catalogFile.exists()) return emptyMap()
 
-                trimmed.startsWith("[") -> {
-                    inVersions = false
-                }
+        val versionCatalog =
+            TomlFileReader.decodeFromFile<VersionCatalog>(
+                deserializer = serializer(),
+                tomlFilePath = catalogFile.absolutePath,
+            )
 
-                inVersions && !trimmed.startsWith("#") && trimmed.contains("=") -> {
-                    val (rawKey, rawValue) = trimmed.split("=", limit = 2)
-                    result[rawKey.trim()] = rawValue.trim().trim('"')
-                }
-            }
-        }
-        return result
+        println("Parsed version catalog from $catalogFile to $versionCatalog")
+
+        return versionCatalog.versions
     }
 
     private companion object {
