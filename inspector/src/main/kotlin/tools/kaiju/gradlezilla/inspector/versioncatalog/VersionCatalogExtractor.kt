@@ -1,5 +1,6 @@
 package tools.kaiju.gradlezilla.inspector.versioncatalog
 
+import com.akuleshov7.ktoml.TomlInputConfig
 import com.akuleshov7.ktoml.file.TomlFileReader
 import kotlinx.serialization.serializer
 import tools.kaiju.gradlezilla.models.AgpData
@@ -9,33 +10,45 @@ import java.io.File
 
 class VersionCatalogExtractor : AgpDataExtractor {
     override fun extract(projectDir: File): AgpData? {
-        val versions = parseVersionCatalog(projectDir)
+        val catalogFile = File(projectDir, "gradle/libs.versions.toml")
+        if (!catalogFile.exists()) return null
 
-        val compileSdk =
-            COMPILE_SDK_KEYS.firstNotNullOfOrNull { versions[it]?.toIntOrNull() }
-                ?: throw AgpDataExtractionException(
-                    message =
-                        "Could not determine compileSdk for project at '$projectDir' — " +
-                            "no compileSdk entry found in gradle/libs.versions.toml",
-                    cause = null,
-                )
+        return try {
+            val versions = parseVersionCatalog(catalogFile)
 
-        val buildToolsVersion = BUILD_TOOLS_KEYS.firstNotNullOfOrNull { versions[it] }
-        val ndkVersion = NDK_KEYS.firstNotNullOfOrNull { versions[it] }
+            val compileSdk =
+                COMPILE_SDK_KEYS.firstNotNullOfOrNull { versions[it]?.toIntOrNull() }
+                    ?: throw AgpDataExtractionException(
+                        message =
+                            "Could not determine compileSdk for project at '$projectDir' — " +
+                                "no compileSdk entry found in gradle/libs.versions.toml",
+                        cause = null,
+                    )
 
-        return AgpData(
-            compileSdk = compileSdk,
-            buildToolsVersion = buildToolsVersion,
-            ndkVersion = ndkVersion,
-        )
+            val buildToolsVersion = BUILD_TOOLS_KEYS.firstNotNullOfOrNull { versions[it] }
+            val ndkVersion = NDK_KEYS.firstNotNullOfOrNull { versions[it] }
+
+            return AgpData(
+                compileSdk = compileSdk,
+                buildToolsVersion = buildToolsVersion,
+                ndkVersion = ndkVersion,
+            )
+        } catch (e: Exception) {
+            null
+        }
     }
 
-    private fun parseVersionCatalog(projectDir: File): Map<String, String> {
-        val catalogFile = File(projectDir, "gradle/libs.versions.toml")
-        if (!catalogFile.exists()) return emptyMap()
+    private fun parseVersionCatalog(catalogFile: File): Map<String, String> {
+        val tomlReader =
+            TomlFileReader(
+                inputConfig =
+                    TomlInputConfig(
+                        ignoreUnknownNames = true,
+                    ),
+            )
 
         val versionCatalog =
-            TomlFileReader.decodeFromFile<VersionCatalog>(
+            tomlReader.decodeFromFile<VersionCatalog>(
                 deserializer = serializer(),
                 tomlFilePath = catalogFile.absolutePath,
             )

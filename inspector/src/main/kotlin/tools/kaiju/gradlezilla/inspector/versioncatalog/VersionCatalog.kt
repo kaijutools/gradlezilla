@@ -7,4 +7,5 @@ data class VersionCatalog(
     val versions: Map<String, String> = emptyMap(),
     val libraries: Map<String, Library> = emptyMap(),
     val plugins: Map<String, Plugin> = emptyMap(),
+    val bundles: Map<String, List<String>> = emptyMap(),
 )
