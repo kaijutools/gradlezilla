@@ -1,3 +1,5 @@
 style:
   WildcardImport:
     active: false
+  ReturnCount:
+    active: false

@@ -62,10 +62,11 @@ class InitScriptExtractor : AgpDataExtractor {
         )
     }
 
+    @Throws(IllegalArgumentException::class)
     private fun createInitScript(): File {
         val rawScript =
             this::class.java.getResource("/extractor.gradle")?.readText()
-                ?: throw IllegalStateException("Fatal: extractor.gradle not found in resources")
+                ?: error("Fatal: extractor.gradle not found in resources")
 
         val processedScript = rawScript.replace(PREFIX_TAG, DATA_PREFIX)
 
