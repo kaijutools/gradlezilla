@@ -1,0 +1,72 @@
+name: Repository Matrix Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-repo:
+    name: Test ${{ matrix.repo.name }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        repo:
+          - { name: 'Sunflower', url: 'https://github.com/android/sunflower.git'}
+          - { name: 'Now In Android', url: 'https://github.com/android/nowinandroid.git'}
+          - { name: 'Timber', url: 'https://github.com/JakeWharton/timber.git'}
+          - { name: 'Signal', url: 'https://github.com/signalapp/Signal-Android.git' }
+          - { name: 'Wikipedia', url: 'https://github.com/wikimedia/apps-android-wikipedia.git' }
+
+    steps:
+      - name: Checkout Gradlezilla
+        uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Clone Target Repository
+        run: git clone --depth 1 ${{ matrix.repo.url }} target-repo
+
+      - name: Run Gradlezilla
+        id: run-cli
+        run: |
+          if ./gradlew :cli:run --args="generate $PWD/target-repo"; then
+            echo "status=✅ Success" >> $GITHUB_OUTPUT
+          else
+            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Save Result to Markdown
+        run: |
+          echo "| ${{ matrix.repo.name }} | ${{ steps.run-cli.outputs.status }} |" > result-${{ strategy.job-index }}.md
+
+      - name: Upload Result Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-result-${{ strategy.job-index }}
+          path: result-${{ strategy.job-index }}.md
+          retention-days: 1
+
+  generate-report:
+    name: Generate Markdown Report
+    needs: test-repo
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-result-*
+          merge-multiple: true
+          path: results/
+
+      - name: Compile Markdown Table
+        run: |
+          echo "### Gradlezilla Matrix Report" >> $GITHUB_STEP_SUMMARY
+          echo "| Repository | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          cat results/*.md >> $GITHUB_STEP_SUMMARY
