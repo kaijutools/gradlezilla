@@ -2,9 +2,6 @@ name: Repository Matrix Test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - chore-matrix-repo-test
 
 jobs:
   test-repo:
