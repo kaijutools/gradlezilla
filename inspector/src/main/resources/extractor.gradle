@@ -1,0 +1,18 @@
+allprojects {
+    afterEvaluate { project ->
+        def isAndroid = project.plugins.hasPlugin('com.android.application') ||
+                project.plugins.hasPlugin('com.android.library')
+
+        if (isAndroid) {
+            def androidExt = project.extensions.findByName('android')
+            if (androidExt != null) {
+                def compileSdk = androidExt.hasProperty('compileSdk') ? androidExt.compileSdk : androidExt.hasProperty('compileSdkVersion') ? androidExt.compileSdkVersion : null
+                def buildTools = androidExt.hasProperty('buildToolsVersion') ? androidExt.buildToolsVersion : null
+                def ndkVersion = androidExt.hasProperty('ndkVersion') ? androidExt.ndkVersion : null
+
+                // {{PREFIX}} will be replaced at runtime
+                println "{{PREFIX}}compileSdk=${compileSdk}::buildTools=${buildTools}::ndk=${ndkVersion}"
+            }
+        }
+    }
+}

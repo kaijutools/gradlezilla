@@ -4,6 +4,7 @@ import org.gradle.tooling.GradleConnectionException
 import org.gradle.tooling.GradleConnector
 import org.gradle.tooling.model.GradleProject
 import org.gradle.tooling.model.build.BuildEnvironment
+import tools.kaiju.gradlezilla.inspector.initscript.InitScriptExtractor
 import tools.kaiju.gradlezilla.inspector.versioncatalog.VersionCatalogExtractor
 import tools.kaiju.gradlezilla.models.*
 import java.io.File
@@ -13,9 +14,9 @@ class GradleProjectInspector(
 ) {
     private val extractors: List<AgpDataExtractor> =
         listOf(
+            InitScriptExtractor(),
             VersionCatalogExtractor(),
             StaticBuildFileExtractor(),
-            InitScriptExtractor(),
         )
 
     fun targets(): List<BuildTarget> {
