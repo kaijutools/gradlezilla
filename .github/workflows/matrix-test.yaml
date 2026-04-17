@@ -2,9 +2,6 @@ name: Repository Matrix Test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature-upload-dockerfile-matrix
 
 jobs:
   test-repo:
