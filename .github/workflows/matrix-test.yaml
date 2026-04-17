@@ -2,6 +2,9 @@ name: Repository Matrix Test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature-upload-dockerfile-matrix
 
 jobs:
   test-repo:
@@ -39,6 +42,14 @@ jobs:
           else
             echo "status=❌ Failed" >> $GITHUB_OUTPUT
           fi
+
+      - name: Upload Generated Dockerfile
+        if: steps.run-cli.outputs.status == 'status=✅ Success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerfile-${{ strategy.job-index }}
+          path: target-repo/Dockerfile
+          retention-days: 1
 
       - name: Save Result to Markdown
         run: |
