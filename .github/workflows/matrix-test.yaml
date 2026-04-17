@@ -44,7 +44,7 @@ jobs:
           fi
 
       - name: Upload Generated Dockerfile
-        if: steps.run-cli.outputs.status == 'status=✅ Success'
+        if: steps.run-cli.outputs.status == '✅ Success'
         uses: actions/upload-artifact@v4
         with:
           name: dockerfile-${{ strategy.job-index }}
