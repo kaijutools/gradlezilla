@@ -40,6 +40,14 @@ jobs:
             echo "status=❌ Failed" >> $GITHUB_OUTPUT
           fi
 
+      - name: Upload Generated Dockerfile
+        if: steps.run-cli.outputs.status == '✅ Success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dockerfile-${{ strategy.job-index }}
+          path: target-repo/Dockerfile
+          retention-days: 1
+
       - name: Save Result to Markdown
         run: |
           echo "| ${{ matrix.repo.name }} | ${{ steps.run-cli.outputs.status }} |" > result-${{ strategy.job-index }}.md
