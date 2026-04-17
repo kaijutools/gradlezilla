@@ -4,8 +4,10 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.types.file
+import tools.kaiju.gradlezilla.generator.DockerfileGenerator
 import tools.kaiju.gradlezilla.inspector.GradleInspectorException
 import tools.kaiju.gradlezilla.inspector.GradleProjectInspector
+import tools.kaiju.gradlezilla.models.AndroidProjectSpec
 import java.io.File
 
 class Generate :
@@ -24,13 +26,25 @@ class Generate :
 
     @Suppress("SwallowedException")
     override fun run() {
-        val inspection =
+        val spec =
             try {
                 GradleProjectInspector(projectDir).inspect()
             } catch (e: GradleInspectorException) {
                 throw UsageError(e.message ?: "Could not connect to Gradle Project at '$projectDir'.")
             }
 
-        echo("inspection = $inspection")
+        echo("inspection\n${spec.format()}")
+
+        val dockerfile = DockerfileGenerator().generate(spec)
+        echo(dockerfile)
     }
+
+    private fun AndroidProjectSpec.format(): String =
+        buildList {
+            add("JDK: $jdkVersion")
+            add("CLI tools: $androidCommandLineToolsVersion")
+            add("Android sdk: $androidSdkVersion")
+            add("Platform tools: $androidPlatformToolsVersion")
+            add("Ndk: $androidSdkVersion")
+        }.joinToString("\n")
 }

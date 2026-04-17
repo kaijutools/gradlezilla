@@ -1,0 +1,34 @@
+# --- Gradlezilla Android Builder ---
+FROM eclipse-temurin:{{JDK_VERSION}}-jdk-jammy
+
+# Install required OS packages
+RUN apt-get update && apt-get install -y \
+    wget unzip git git-lfs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set up Android SDK environment variables
+ENV ANDROID_HOME=/opt/android-sdk
+ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
+
+# Download and install Android Command Line Tools
+RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
+    wget -q https://dl.google.com/android/repository/commandlinetools-linux-{{CMDLINE_TOOLS_VERSION}}_latest.zip -O cmdline-tools.zip && \
+    unzip -q cmdline-tools.zip -d ${ANDROID_HOME}/cmdline-tools && \
+    rm cmdline-tools.zip && \
+    mv ${ANDROID_HOME}/cmdline-tools/cmdline-tools ${ANDROID_HOME}/cmdline-tools/latest
+
+# Accept licenses and install exact project SDK versions
+RUN yes | sdkmanager --licenses > /dev/null && \
+    sdkmanager {{SDK_PACKAGES}}
+
+# --- Build Execution ---
+WORKDIR /workspace
+
+# Copy entire repository
+COPY . .
+
+# Make Gradle wrapper executable
+RUN chmod +x ./gradlew
+
+# Default build command (assemble release APKs)
+CMD ["bash", "-c", "./gradlew assembleRelease --no-daemon"]
