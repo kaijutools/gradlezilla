@@ -6,7 +6,7 @@ Writing and maintaining Dockerfiles for Android CI/CD is notoriously painful. Yo
 
 Gradlezilla introspects your Android project, extracts the exact toolchain requirements, and generates a production-ready, immutable Docker environment. No Gradle Daemon crashes. No host bleed-through. Just reliable builds.
 
-![Gradlezilla Demo](docs/demo.gif) *(TODO: Replace with ASCIInema showing `gradlezilla generate .`)*
+![Gradlezilla Demo](docs/demo.gif)
 
 ## 🚀 Installation
 
