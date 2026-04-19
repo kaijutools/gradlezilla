@@ -46,6 +46,7 @@ kotlin {
 
 application {
     mainClass.set("tools.kaiju.gradlezilla.cli.MainKt")
+    applicationName = "gradlezilla"
 }
 
 dependencies {
