@@ -29,6 +29,7 @@ jobs:
       - name: Generate SHA-256 Checksum
         run: |
           cd cli/build/distributions/
+          mv *.zip gradlezilla.zip
           shasum -a 256 gradlezilla.zip > gradlezilla.zip.sha256
           echo "Generated Checksum:"
           cat gradlezilla.zip.sha256
