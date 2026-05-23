@@ -3,13 +3,15 @@ package tools.kaiju.gradlezilla.cli
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.clikt.parameters.types.file
+import tools.kaiju.gradlezilla.cli.format.GenerateFormatter
 import tools.kaiju.gradlezilla.generator.DockerfileGenerator
 import tools.kaiju.gradlezilla.inspector.GradleInspectorException
 import tools.kaiju.gradlezilla.inspector.GradleProjectInspector
-import tools.kaiju.gradlezilla.models.AndroidProjectSpec
 import java.io.File
 
 class Generate :
@@ -32,9 +34,16 @@ class Generate :
         help = "Print Dockerfile to console instead of writing to disk",
     ).flag(default = false)
 
+    private val format by option(
+        "--format",
+        help = "Output format (human, json, sarif)",
+    ).choice("human", "json", "sarif").default("human")
+
     @Suppress("SwallowedException")
     override fun run() {
-        echo("Inspecting Android project at: ${projectDir.absolutePath} ...")
+        val isHuman = format == "human"
+
+        if (isHuman) echo("Inspecting Android project at: ${projectDir.absolutePath} ...")
 
         val spec =
             try {
@@ -43,25 +52,18 @@ class Generate :
                 throw UsageError(e.message ?: "Could not connect to Gradle Project at '$projectDir'.")
             }
 
-        echo("✅ Inspection complete:\n${spec.format()}\n")
-
         val dockerfile = DockerfileGenerator().generate(spec)
-        if (dryRun) {
-            echo("--- DRY RUN: Generated Dockerfile ---")
-            echo(dockerfile)
-        } else {
-            val outputFile = File(projectDir, "Dockerfile")
-            outputFile.writeText(dockerfile)
-            echo("🚀 Successfully wrote Dockerfile to: ${outputFile.absolutePath}")
-        }
-    }
 
-    private fun AndroidProjectSpec.format(): String =
-        buildList {
-            add("JDK: $jdkVersion")
-            add("CLI tools: $androidCommandLineToolsVersion")
-            add("Android sdk: $androidSdkVersion")
-            add("Platform tools: $androidPlatformToolsVersion")
-            add("Ndk: $androidNdkVersion")
-        }.joinToString("\n")
+        val outputPath: String? =
+            if (dryRun) {
+                null
+            } else {
+                val outputFile = File(projectDir, "Dockerfile")
+                outputFile.writeText(dockerfile)
+                outputFile.absolutePath
+            }
+
+        val formatter = GenerateFormatter.forFormat(format)
+        echo(formatter.format(spec, dockerfile, outputPath))
+    }
 }
