@@ -1,5 +1,8 @@
 package tools.kaiju.gradlezilla.models
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class AndroidProjectSpec(
     val jdkVersion: Int = 17,
     val androidSdkVersion: Int,

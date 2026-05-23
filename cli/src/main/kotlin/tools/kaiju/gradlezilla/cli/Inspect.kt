@@ -3,7 +3,11 @@ package tools.kaiju.gradlezilla.cli
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.clikt.parameters.types.file
+import tools.kaiju.gradlezilla.cli.format.InspectFormatter
 import tools.kaiju.gradlezilla.inspector.GradleInspectorException
 import tools.kaiju.gradlezilla.inspector.GradleProjectInspector
 import java.io.File
@@ -17,6 +21,11 @@ class Inspect :
         name = "projectDir",
         help = "Path to the Gradle project root directory.",
     ).file(mustExist = true, canBeFile = false, canBeDir = true)
+
+    private val format by option(
+        "--format",
+        help = "Output format (human, json, sarif)",
+    ).choice("human", "json", "sarif").default("human")
 
     @Suppress("SwallowedException")
     override fun run() {
@@ -32,17 +41,6 @@ class Inspect :
             return
         }
 
-        var currentGroup: String? = null
-        for (target in targets) {
-            val group = target.group ?: "(ungrouped)"
-            if (group != currentGroup) {
-                if (currentGroup != null) echo("")
-                echo(group)
-                echo("-".repeat(group.length))
-                currentGroup = group
-            }
-            val desc = if (target.description != null) " - ${target.description}" else ""
-            echo("  ${target.path}$desc")
-        }
+        echo(InspectFormatter.forFormat(format).format(targets))
     }
 }
