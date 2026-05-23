@@ -7,6 +7,7 @@ plugins {
 
 dependencies {
     implementation(project(":models"))
+    implementation(libs.kotlinx.serialization.core)
     implementation(libs.ktoml.core)
     implementation(libs.ktoml.file)
     implementation(libs.gradle.tooling)
