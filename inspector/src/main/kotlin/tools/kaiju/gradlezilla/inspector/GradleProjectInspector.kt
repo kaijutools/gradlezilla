@@ -21,6 +21,9 @@ class GradleProjectInspector(
 
     fun targets(): List<BuildTarget> {
         validateGradleProject()
+        JdkPreflight.check(projectDir)?.let { incompatibilityReason ->
+            throw GradleInspectorException(incompatibilityReason)
+        }
         try {
             GradleConnector
                 .newConnector()
@@ -39,7 +42,10 @@ class GradleProjectInspector(
                         }.sortedWith(compareBy({ it.group ?: "\uFFFF" }, { it.path }))
                 }
         } catch (e: GradleConnectionException) {
-            throw GradleInspectorException("Could not connect to Gradle project at '$projectDir': ${e.message}", e)
+            throw GradleInspectorException(
+                "Could not connect to Gradle project at '$projectDir': ${e::class.simpleName}::${e.message}",
+                e,
+            )
         }
     }
 

@@ -24,6 +24,7 @@ class Inspect :
             try {
                 GradleProjectInspector(projectDir).targets()
             } catch (e: GradleInspectorException) {
+                echo(e.message ?: "Could not connect to Gradle project at '$projectDir'")
                 throw UsageError(e.message ?: "Could not connect to Gradle project at '$projectDir'")
             }
 
