@@ -11,11 +11,17 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class InspectFormatterTest {
-    private val targets = listOf(
-        BuildTarget(name = "assembleDebug", path = ":app:assembleDebug", group = "build", description = "Assembles debug build"),
-        BuildTarget(name = "test", path = ":app:test", group = "verification", description = "Runs tests"),
-        BuildTarget(name = "help", path = ":help", group = null, description = null),
-    )
+    private val targets =
+        listOf(
+            BuildTarget(
+                name = "assembleDebug",
+                path = ":app:assembleDebug",
+                group = "build",
+                description = "Assembles debug build",
+            ),
+            BuildTarget(name = "test", path = ":app:test", group = "verification", description = "Runs tests"),
+            BuildTarget(name = "help", path = ":help", group = null, description = null),
+        )
 
     @Test
     fun humanFormat_groupsTargets() {
@@ -48,7 +54,12 @@ class InspectFormatterTest {
     @Test
     fun jsonFormat_containsExpectedFields() {
         val result = InspectFormatter.JsonOutput.format(targets)
-        val first = Json.parseToJsonElement(result).jsonArray.first().jsonObject
+        val first =
+            Json
+                .parseToJsonElement(result)
+                .jsonArray
+                .first()
+                .jsonObject
         assertEquals("assembleDebug", first["name"]?.jsonPrimitive?.content)
         assertEquals(":app:assembleDebug", first["path"]?.jsonPrimitive?.content)
         assertEquals("build", first["group"]?.jsonPrimitive?.content)
@@ -69,8 +80,22 @@ class InspectFormatterTest {
         val results = run?.get("results")?.jsonArray
         assertNotNull(results)
         assertEquals(3, results.size)
-        assertEquals("informational", results.first().jsonObject["kind"]?.jsonPrimitive?.content)
-        assertEquals("build-target", results.first().jsonObject["ruleId"]?.jsonPrimitive?.content)
+        assertEquals(
+            "informational",
+            results
+                .first()
+                .jsonObject["kind"]
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "build-target",
+            results
+                .first()
+                .jsonObject["ruleId"]
+                ?.jsonPrimitive
+                ?.content,
+        )
     }
 
     @Test

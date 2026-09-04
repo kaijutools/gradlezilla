@@ -11,14 +11,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class GenerateFormatterTest {
-    private val spec = AndroidProjectSpec(
-        jdkVersion = 17,
-        androidSdkVersion = 34,
-        androidCommandLineToolsVersion = "11076708",
-        androidPlatformToolsVersion = "34.0.5",
-        androidNdkVersion = null,
-        gradleVersion = "8.4",
-    )
+    private val spec =
+        AndroidProjectSpec(
+            jdkVersion = 17,
+            androidSdkVersion = 34,
+            androidCommandLineToolsVersion = "11076708",
+            androidPlatformToolsVersion = "34.0.5",
+            androidNdkVersion = null,
+            gradleVersion = "8.4",
+        )
     private val dockerfile = "FROM ubuntu:22.04\nRUN echo hello"
 
     @Test
