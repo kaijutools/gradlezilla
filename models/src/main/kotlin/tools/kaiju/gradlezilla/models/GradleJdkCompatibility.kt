@@ -1,6 +1,7 @@
 package tools.kaiju.gradlezilla.models
 
 object GradleJdkCompatibility {
+    @Suppress("MagicNumber")
     private val maxJdk: List<Pair<GradleVersion, Int>> =
         listOf(
             GradleVersion(5, 0) to 11,
@@ -45,7 +46,13 @@ data class GradleVersion(
     val major: Int,
     val minor: Int,
 ) : Comparable<GradleVersion> {
-    override fun compareTo(other: GradleVersion): Int = compareValuesBy(this, other, GradleVersion::major, GradleVersion::minor)
+    override fun compareTo(other: GradleVersion): Int =
+        compareValuesBy(
+            this,
+            other,
+            GradleVersion::major,
+            GradleVersion::minor,
+        )
 
     override fun toString(): String = "$major.$minor"
 
