@@ -24,7 +24,6 @@ class InitScriptExtractor : AgpDataExtractor {
                 .withArguments(
                     "--init-script",
                     initScriptFile.absolutePath,
-                    "--no-configuration-cache",
                     "-q",
                 ).setStandardOutput(outputStream)
                 .setStandardError(errorStream)
