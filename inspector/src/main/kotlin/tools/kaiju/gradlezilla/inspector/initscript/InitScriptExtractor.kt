@@ -32,9 +32,22 @@ class InitScriptExtractor : AgpDataExtractor {
 
             val output = outputStream.toString()
             dumpDebugOutput(output, errorStream.toString())
-            parseOutput(output)?.let {
-                ExtractionOutcome.Found(it)
-            } ?: ExtractionOutcome.NotApplicable("Project misconfigured")
+            when (val result = parseOutput(output)) {
+                is ParseOutcome.Success -> ExtractionOutcome.Found(result.data)
+                is ParseOutcome.NoDataLine ->
+                    ExtractionOutcome.NotApplicable(
+                        "Init script produced no $DATA_PREFIX line — android extension not found on any project",
+                    )
+                is ParseOutcome.MissingCompileSdk ->
+                    ExtractionOutcome.NotApplicable(
+                        "Init script data line present but compileSdk is missing: '${result.dataLine}'",
+                    )
+                is ParseOutcome.UnparseableCompileSdk ->
+                    ExtractionOutcome.Failed(
+                        "Could not parse compileSdk value '${result.rawValue}' from init script output",
+                        null,
+                    )
+            }
         } catch (e: Exception) {
             dumpDebugOutput(outputStream.toString(), errorStream.toString())
             ExtractionOutcome.Failed("Failed to extract with init script", e)
@@ -52,10 +65,10 @@ class InitScriptExtractor : AgpDataExtractor {
         System.err.println("[InitScriptExtractor] init script stderr:\n$stderr")
     }
 
-    private fun parseOutput(output: String): AgpData? {
+    private fun parseOutput(output: String): ParseOutcome {
         val lines = output.lines().filter { it.startsWith(DATA_PREFIX) }
 
-        if (lines.isEmpty()) return null
+        if (lines.isEmpty()) return ParseOutcome.NoDataLine
 
         val dataLine = lines.first().removePrefix(DATA_PREFIX)
 
@@ -65,14 +78,34 @@ class InitScriptExtractor : AgpDataExtractor {
                 key to value.takeIf { v -> v != "null" }
             }
 
-        val rawSdk = properties["compileSdk"]?.substringAfterLast("-")
-        val compileSdk = rawSdk?.toIntOrNull() ?: return null
+        val rawSdk = properties["compileSdk"] ?: return ParseOutcome.MissingCompileSdk(dataLine)
+        val compileSdk =
+            rawSdk.substringAfterLast("-").toIntOrNull()
+                ?: return ParseOutcome.UnparseableCompileSdk(rawSdk)
 
-        return AgpData(
-            compileSdk = compileSdk,
-            buildToolsVersion = properties["buildTools"],
-            ndkVersion = properties["ndk"],
+        return ParseOutcome.Success(
+            AgpData(
+                compileSdk = compileSdk,
+                buildToolsVersion = properties["buildTools"],
+                ndkVersion = properties["ndk"],
+            ),
         )
+    }
+
+    private sealed class ParseOutcome {
+        data class Success(
+            val data: AgpData,
+        ) : ParseOutcome()
+
+        data object NoDataLine : ParseOutcome()
+
+        data class MissingCompileSdk(
+            val dataLine: String,
+        ) : ParseOutcome()
+
+        data class UnparseableCompileSdk(
+            val rawValue: String,
+        ) : ParseOutcome()
     }
 
     @Throws(IllegalArgumentException::class)
