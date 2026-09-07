@@ -1,39 +1,39 @@
 package tools.kaiju.gradlezilla.inspector.initscript
 
-import org.gradle.tooling.GradleConnector
 import tools.kaiju.gradlezilla.models.AgpData
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
+import tools.kaiju.gradlezilla.models.ExtractionContext
+import tools.kaiju.gradlezilla.models.ExtractionOutcome
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.*
 
 class InitScriptExtractor : AgpDataExtractor {
-    override fun extract(projectDir: File): AgpData? {
+    override val name: String
+        get() = InitScriptExtractor::class.java.canonicalName
+
+    override fun extract(context: ExtractionContext): ExtractionOutcome {
         val initScriptFile = createInitScript()
         val outputStream = ByteArrayOutputStream()
 
         return try {
-            GradleConnector
-                .newConnector()
-                .forProjectDirectory(projectDir)
-                .connect()
-                .use { connection ->
-                    connection
-                        .newBuild()
-                        .forTasks("help")
-                        .withArguments(
-                            "--init-script",
-                            initScriptFile.absolutePath,
-                            "--no-configuration-cache",
-                            "-q",
-                        ).setStandardOutput(outputStream)
-                        .run()
-                }
+            context.connection
+                .newBuild()
+                .forTasks("help")
+                .withArguments(
+                    "--init-script",
+                    initScriptFile.absolutePath,
+                    "--no-configuration-cache",
+                    "-q",
+                ).setStandardOutput(outputStream)
+                .run()
 
             val output = outputStream.toString()
-            parseOutput(output)
-        } catch (_: Exception) {
-            null
+            parseOutput(output)?.let {
+                ExtractionOutcome.Found(it)
+            } ?: ExtractionOutcome.NotApplicable("Project misconfigured")
+        } catch (e: Exception) {
+            ExtractionOutcome.Failed("Failed to extract with init script", e)
         } finally {
             initScriptFile.delete()
         }

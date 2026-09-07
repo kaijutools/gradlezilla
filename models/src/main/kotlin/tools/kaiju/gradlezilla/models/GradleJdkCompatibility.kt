@@ -18,6 +18,9 @@ object GradleJdkCompatibility {
             GradleVersion(8, 8) to 22,
             GradleVersion(8, 10) to 23,
             GradleVersion(8, 14) to 24,
+            GradleVersion(9, 0) to 24,
+            GradleVersion(9, 1) to 25,
+            GradleVersion(9, 4) to 26,
         ).sortedBy { it.first }
 
     /** Returns null when compatible, unknown, or newer than the table. */

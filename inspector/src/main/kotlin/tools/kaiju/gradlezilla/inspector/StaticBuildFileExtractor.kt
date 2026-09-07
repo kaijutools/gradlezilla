@@ -1,9 +1,12 @@
 package tools.kaiju.gradlezilla.inspector
 
-import tools.kaiju.gradlezilla.models.AgpData
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
-import java.io.File
+import tools.kaiju.gradlezilla.models.ExtractionContext
+import tools.kaiju.gradlezilla.models.ExtractionOutcome
 
 class StaticBuildFileExtractor : AgpDataExtractor {
-    override fun extract(projectDir: File): AgpData? = null
+    override val name: String
+        get() = StaticBuildFileExtractor::class.java.canonicalName
+
+    override fun extract(context: ExtractionContext): ExtractionOutcome = ExtractionOutcome.Failed("not implemented", null)
 }

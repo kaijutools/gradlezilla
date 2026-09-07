@@ -2,6 +2,7 @@ package tools.kaiju.gradlezilla.inspector
 
 import org.gradle.tooling.GradleConnectionException
 import org.gradle.tooling.GradleConnector
+import org.gradle.tooling.ProjectConnection
 import org.gradle.tooling.model.GradleProject
 import org.gradle.tooling.model.build.BuildEnvironment
 import tools.kaiju.gradlezilla.inspector.initscript.InitScriptExtractor
@@ -19,98 +20,116 @@ class GradleProjectInspector(
             StaticBuildFileExtractor(),
         )
 
+    @Throws(GradleInspectorException::class)
     fun targets(): List<BuildTarget> {
         validateGradleProject()
-        JdkPreflight.check(projectDir)?.let { incompatibilityReason ->
-            throw GradleInspectorException(incompatibilityReason)
+        JdkPreflight.check(projectDir)?.let { throw GradleInspectorException(it) }
+
+        return try {
+            connect().use { connection ->
+                val project = connection.getModel(GradleProject::class.java)
+                project.tasks
+                    .map { task ->
+                        BuildTarget(
+                            name = task.name,
+                            path = task.path,
+                            group = task.group?.takeIf { it.isNotBlank() },
+                            description = task.description?.takeIf { it.isNotBlank() },
+                        )
+                    }.sortedWith(compareBy({ it.group ?: "\uFFFF" }, { it.path }))
+            }
+        } catch (e: GradleInspectorException) {
+            throw e
         }
+    }
+
+    @Throws(GradleInspectorException::class)
+    fun inspect(): AndroidProjectSpec {
+        validateGradleProject()
+        JdkPreflight.check(projectDir)?.let { throw GradleInspectorException(it) }
+
+        return try {
+            connect().use { connection ->
+                val env = fetchEnvironment(connection)
+                val ctx = ExtractionContext(projectDir, connection, env)
+                val agpData = executeExtractionChain(ctx)
+                return AndroidProjectSpec(
+                    jdkVersion = env.jdkVersion,
+                    gradleVersion = env.gradleVersion,
+                    androidSdkVersion = agpData.compileSdk,
+                    androidPlatformToolsVersion = agpData.buildToolsVersion,
+                    androidNdkVersion = agpData.ndkVersion,
+                )
+            }
+        } catch (e: GradleInspectorException) {
+            throw e
+        }
+    }
+
+    @Throws(GradleInspectorException::class)
+    internal fun connect(): ProjectConnection =
         try {
             GradleConnector
                 .newConnector()
                 .forProjectDirectory(projectDir)
                 .connect()
-                .use { connection ->
-                    val project = connection.getModel(GradleProject::class.java)
-                    return project.tasks
-                        .map { task ->
-                            BuildTarget(
-                                name = task.name,
-                                path = task.path,
-                                group = task.group?.takeIf { it.isNotBlank() },
-                                description = task.description?.takeIf { it.isNotBlank() },
-                            )
-                        }.sortedWith(compareBy({ it.group ?: "\uFFFF" }, { it.path }))
-                }
         } catch (e: GradleConnectionException) {
             throw GradleInspectorException(
                 "Could not connect to Gradle project at '$projectDir': ${e::class.simpleName}::${e.message}",
                 e,
             )
         }
-    }
-
-    fun inspect(): AndroidProjectSpec {
-        validateGradleProject()
-
-        val env = fetchEnvironment()
-
-        val agpData = executeExtractionChain()
-
-        return AndroidProjectSpec(
-            jdkVersion = env.jdkVersion,
-            gradleVersion = env.gradleVersion,
-            androidSdkVersion = agpData.compileSdk,
-            androidPlatformToolsVersion = agpData.buildToolsVersion,
-            androidNdkVersion = agpData.ndkVersion,
-        )
-    }
 
     @Throws(GradleInspectorException::class)
-    internal fun fetchEnvironment(): GradleProjectEnvironment {
+    internal fun fetchEnvironment(connection: ProjectConnection): GradleProjectEnvironment {
         val hasBuildSrc = File(projectDir, "buildSrc").isDirectory
         val hasBuildLogic = File(projectDir, "build-logic").isDirectory
 
         try {
-            GradleConnector
-                .newConnector()
-                .forProjectDirectory(projectDir)
-                .connect()
-                .use { connection ->
-                    val buildEnv = connection.getModel(BuildEnvironment::class.java)
+            val buildEnv = connection.getModel(BuildEnvironment::class.java)
 
-                    val gradleProject = connection.getModel(GradleProject::class.java)
+            val gradleProject = connection.getModel(GradleProject::class.java)
 
-                    return GradleProjectEnvironment(
-                        jdkVersion = jdkMajorVersion(buildEnv.java.javaHome),
-                        gradleVersion = buildEnv.gradle.gradleVersion,
-                        gradleJvmArgs =
-                            buildEnv.java.jvmArguments
-                                .joinToString(" ")
-                                .takeIf { it.isNotBlank() },
-                        modules = collectModules(gradleProject),
-                        hasBuildSrc = hasBuildSrc,
-                        hasBuildLogic = hasBuildLogic,
-                    )
-                }
+            return GradleProjectEnvironment(
+                jdkVersion = jdkMajorVersion(buildEnv.java.javaHome),
+                gradleVersion = buildEnv.gradle.gradleVersion,
+                gradleJvmArgs =
+                    buildEnv.java.jvmArguments
+                        .joinToString(" ")
+                        .takeIf { it.isNotBlank() },
+                modules = collectModules(gradleProject),
+                hasBuildSrc = hasBuildSrc,
+                hasBuildLogic = hasBuildLogic,
+            )
         } catch (e: GradleConnectionException) {
             throw GradleInspectorException("Could not connect to $projectDir: ${e.message}", e)
         }
     }
 
     @Throws(GradleInspectorException::class)
-    internal fun executeExtractionChain(): AgpData {
+    internal fun executeExtractionChain(context: ExtractionContext): AgpData {
+        val attempts = mutableListOf<Pair<String, ExtractionOutcome>>()
         for (extractor in extractors) {
-            try {
-                val result = extractor.extract(projectDir)
-                if (result != null) {
-                    return result
-                }
-            } catch (e: AgpDataExtractionException) {
-                println("Failed to extract $projectDir: ${e.message}")
+            when (val outcome = extractor.extract(context)) {
+                is ExtractionOutcome.Found -> return outcome.data
+                else -> attempts += extractor.name to outcome
             }
         }
 
-        throw GradleInspectorException("Could not extract Android projects from $projectDir")
+        throw GradleInspectorException(
+            buildString {
+                appendLine("Could not extract Android configuration from ${context.projectDir}")
+                attempts.forEach { (name, outcome) ->
+                    val reason =
+                        when (outcome) {
+                            is ExtractionOutcome.NotApplicable -> outcome.reason
+                            is ExtractionOutcome.Failed -> outcome.reason
+                            is ExtractionOutcome.Found -> error("unreachable")
+                        }
+                    appendLine("    $name: $reason")
+                }
+            },
+        )
     }
 
     private fun collectModules(project: GradleProject): List<ModuleSpec> =
