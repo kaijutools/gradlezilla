@@ -123,7 +123,8 @@ class GradleProjectInspector(
                     val reason =
                         when (outcome) {
                             is ExtractionOutcome.NotApplicable -> outcome.reason
-                            is ExtractionOutcome.Failed -> outcome.reason
+                            is ExtractionOutcome.Failed ->
+                                outcome.cause?.message?.let { "${outcome.reason}: $it" } ?: outcome.reason
                             is ExtractionOutcome.Found -> error("unreachable")
                         }
                     appendLine("    $name: $reason")
