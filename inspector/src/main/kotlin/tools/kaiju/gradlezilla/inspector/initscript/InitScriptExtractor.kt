@@ -15,6 +15,7 @@ class InitScriptExtractor : AgpDataExtractor {
     override fun extract(context: ExtractionContext): ExtractionOutcome {
         val initScriptFile = createInitScript()
         val outputStream = ByteArrayOutputStream()
+        val errorStream = ByteArrayOutputStream()
 
         return try {
             context.connection
@@ -26,17 +27,29 @@ class InitScriptExtractor : AgpDataExtractor {
                     "--no-configuration-cache",
                     "-q",
                 ).setStandardOutput(outputStream)
+                .setStandardError(errorStream)
                 .run()
 
             val output = outputStream.toString()
+            dumpDebugOutput(output, errorStream.toString())
             parseOutput(output)?.let {
                 ExtractionOutcome.Found(it)
             } ?: ExtractionOutcome.NotApplicable("Project misconfigured")
         } catch (e: Exception) {
+            dumpDebugOutput(outputStream.toString(), errorStream.toString())
             ExtractionOutcome.Failed("Failed to extract with init script", e)
         } finally {
             initScriptFile.delete()
         }
+    }
+
+    private fun dumpDebugOutput(
+        stdout: String,
+        stderr: String,
+    ) {
+        if (System.getenv("GRADLEZILLA_DEBUG") == null) return
+        System.err.println("[InitScriptExtractor] init script stdout:\n$stdout")
+        System.err.println("[InitScriptExtractor] init script stderr:\n$stderr")
     }
 
     private fun parseOutput(output: String): AgpData? {
