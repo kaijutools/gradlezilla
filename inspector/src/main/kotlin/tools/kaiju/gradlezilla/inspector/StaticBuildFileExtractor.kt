@@ -8,5 +8,9 @@ class StaticBuildFileExtractor : AgpDataExtractor {
     override val name: String
         get() = StaticBuildFileExtractor::class.java.simpleName
 
-    override fun extract(context: ExtractionContext): ExtractionOutcome = ExtractionOutcome.Failed("not implemented", null)
+    override fun extract(context: ExtractionContext): ExtractionOutcome =
+        ExtractionOutcome.Failed(
+            "not implemented",
+            null,
+        )
 }

@@ -6,6 +6,7 @@ import tools.kaiju.gradlezilla.models.ExtractionOutcome
 import tools.kaiju.gradlezilla.models.InitScriptOutputParser
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.util.*
 
 class InitScriptExtractor : AgpDataExtractor {
@@ -32,23 +33,31 @@ class InitScriptExtractor : AgpDataExtractor {
             val output = outputStream.toString()
             dumpDebugOutput(output, errorStream.toString())
             when (val result = InitScriptOutputParser.parse(output)) {
-                is InitScriptOutputParser.ParseOutcome.Success -> ExtractionOutcome.Found(result.data)
-                is InitScriptOutputParser.ParseOutcome.NoDataLine ->
+                is InitScriptOutputParser.ParseOutcome.Success -> {
+                    ExtractionOutcome.Found(result.data)
+                }
+
+                is InitScriptOutputParser.ParseOutcome.NoDataLine -> {
                     ExtractionOutcome.NotApplicable(
                         "Init script produced no ${InitScriptOutputParser.DATA_PREFIX} line — " +
                             "android extension not found on any project",
                     )
-                is InitScriptOutputParser.ParseOutcome.MissingCompileSdk ->
+                }
+
+                is InitScriptOutputParser.ParseOutcome.MissingCompileSdk -> {
                     ExtractionOutcome.NotApplicable(
                         "Init script data line present but compileSdk is missing: '${result.dataLine}'",
                     )
-                is InitScriptOutputParser.ParseOutcome.UnparseableCompileSdk ->
+                }
+
+                is InitScriptOutputParser.ParseOutcome.UnparseableCompileSdk -> {
                     ExtractionOutcome.Failed(
                         "Could not parse compileSdk value '${result.rawValue}' from init script output",
                         null,
                     )
+                }
             }
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             dumpDebugOutput(outputStream.toString(), errorStream.toString())
             ExtractionOutcome.Failed("Failed to extract with init script", e)
         } finally {

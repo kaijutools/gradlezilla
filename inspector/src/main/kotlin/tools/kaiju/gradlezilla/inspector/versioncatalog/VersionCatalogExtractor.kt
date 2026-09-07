@@ -8,6 +8,7 @@ import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
 import tools.kaiju.gradlezilla.models.ExtractionOutcome
 import java.io.File
+import java.io.IOException
 
 class VersionCatalogExtractor : AgpDataExtractor {
     override val name: String
@@ -16,7 +17,8 @@ class VersionCatalogExtractor : AgpDataExtractor {
     override fun extract(context: ExtractionContext): ExtractionOutcome {
         val catalogFile = File(context.projectDir, "gradle/libs.versions.toml")
         if (!catalogFile.exists()) {
-            return ExtractionOutcome.NotApplicable("Gradle Versions catalog file does not exist at ${catalogFile.absolutePath}")
+            val reason = "Gradle Versions catalog file does not exist at ${catalogFile.absolutePath}"
+            return ExtractionOutcome.NotApplicable(reason)
         }
 
         return try {
@@ -41,7 +43,7 @@ class VersionCatalogExtractor : AgpDataExtractor {
                     ndkVersion = ndkVersion,
                 ),
             )
-        } catch (e: Exception) {
+        } catch (e: IOException) {
             ExtractionOutcome.Failed(e.message ?: "Failed to configure project", e)
         }
     }

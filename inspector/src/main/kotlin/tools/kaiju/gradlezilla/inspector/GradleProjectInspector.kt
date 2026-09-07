@@ -39,7 +39,7 @@ class GradleProjectInspector(
                     }.sortedWith(compareBy({ it.group ?: "\uFFFF" }, { it.path }))
             }
         } catch (e: GradleInspectorException) {
-            throw e
+            throw GradleInspectorException(e.message ?: "Unknown error", e)
         }
     }
 
@@ -62,7 +62,7 @@ class GradleProjectInspector(
                 )
             }
         } catch (e: GradleInspectorException) {
-            throw e
+            throw GradleInspectorException(e.message ?: "Unknown error", e)
         }
     }
 
@@ -122,10 +122,17 @@ class GradleProjectInspector(
                 attempts.forEach { (name, outcome) ->
                     val reason =
                         when (outcome) {
-                            is ExtractionOutcome.NotApplicable -> outcome.reason
-                            is ExtractionOutcome.Failed ->
+                            is ExtractionOutcome.NotApplicable -> {
+                                outcome.reason
+                            }
+
+                            is ExtractionOutcome.Failed -> {
                                 outcome.cause?.message?.let { "${outcome.reason}: $it" } ?: outcome.reason
-                            is ExtractionOutcome.Found -> error("unreachable")
+                            }
+
+                            is ExtractionOutcome.Found -> {
+                                error("unreachable")
+                            }
                         }
                     appendLine("    $name: $reason")
                 }
