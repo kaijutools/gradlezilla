@@ -11,7 +11,7 @@ import java.io.File
 
 class VersionCatalogExtractor : AgpDataExtractor {
     override val name: String
-        get() = VersionCatalogExtractor::class.java.canonicalName
+        get() = VersionCatalogExtractor::class.java.simpleName
 
     override fun extract(context: ExtractionContext): ExtractionOutcome {
         val catalogFile = File(context.projectDir, "gradle/libs.versions.toml")

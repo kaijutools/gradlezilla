@@ -10,7 +10,7 @@ import java.util.*
 
 class InitScriptExtractor : AgpDataExtractor {
     override val name: String
-        get() = InitScriptExtractor::class.java.canonicalName
+        get() = InitScriptExtractor::class.java.simpleName
 
     override fun extract(context: ExtractionContext): ExtractionOutcome {
         val initScriptFile = createInitScript()
