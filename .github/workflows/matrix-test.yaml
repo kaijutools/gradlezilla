@@ -85,7 +85,12 @@ jobs:
     needs: test-repo
     if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
+      - name: Checkout Gradlezilla
+        uses: actions/checkout@v6
+
       - name: Download all results
         uses: actions/download-artifact@v8
         with:
@@ -95,7 +100,39 @@ jobs:
 
       - name: Compile Markdown Table
         run: |
+          {
+            echo "| Repository | Status |"
+            echo "|---|---|"
+            cat results/*.md
+          } | tee matrix-table.md
           echo "### Gradlezilla Matrix Report" >> $GITHUB_STEP_SUMMARY
-          echo "| Repository | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          cat results/*.md >> $GITHUB_STEP_SUMMARY
+          cat matrix-table.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Update README
+        if: github.ref == 'refs/heads/main'
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+
+          table = pathlib.Path("matrix-table.md").read_text()
+          readme = pathlib.Path("README.md")
+          content = readme.read_text()
+          content = re.sub(
+              r"(<!-- MATRIX-TABLE:START -->\n).*(\n<!-- MATRIX-TABLE:END -->)",
+              lambda m: m.group(1) + table + m.group(2),
+              content,
+              flags=re.S,
+          )
+          readme.write_text(content)
+          PY
+
+      - name: Commit and push README
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update matrix test results in README"
+            git push origin HEAD:main
+          fi
