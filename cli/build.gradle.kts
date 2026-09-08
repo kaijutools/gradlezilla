@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.detekt)
+    alias(libs.plugins.kotlin.serialization)
     application
 }
 
@@ -51,6 +52,7 @@ application {
 
 dependencies {
     implementation(libs.clikt)
+    implementation(libs.kotlinx.serialization.json)
     implementation(project(":models"))
     implementation(project(":inspector"))
     implementation(project(":generator"))
