@@ -1,18 +1,30 @@
-allprojects {
-    afterEvaluate { project ->
-        def isAndroid = project.plugins.hasPlugin('com.android.application') ||
-                project.plugins.hasPlugin('com.android.library')
+def emit = { project ->
+    def isAndroid = project.plugins.hasPlugin('com.android.application') ||
+            project.plugins.hasPlugin('com.android.library')
+    if (!isAndroid) return
 
-        if (isAndroid) {
-            def androidExt = project.extensions.findByName('android')
-            if (androidExt != null) {
-                def compileSdk = androidExt.hasProperty('compileSdk') ? androidExt.compileSdk : androidExt.hasProperty('compileSdkVersion') ? androidExt.compileSdkVersion : null
-                def buildTools = androidExt.hasProperty('buildToolsVersion') ? androidExt.buildToolsVersion : null
-                def ndkVersion = androidExt.hasProperty('ndkVersion') ? androidExt.ndkVersion : null
+    def androidExt = project.extensions.findByName('android')
+    if (androidExt == null) return
 
-                // {{PREFIX}} will be replaced at runtime
-                println "{{PREFIX}}compileSdk=${compileSdk}::buildTools=${buildTools}::ndk=${ndkVersion}"
-            }
+    def compileSdk = androidExt.hasProperty('compileSdk') ? androidExt.compileSdk : androidExt.hasProperty('compileSdkVersion') ? androidExt.compileSdkVersion : null
+    def buildTools = androidExt.hasProperty('buildToolsVersion') ? androidExt.buildToolsVersion : null
+    def ndkVersion = androidExt.hasProperty('ndkVersion') ? androidExt.ndkVersion : null
+
+    // {{PREFIX}} will be replaced at runtime
+    println "{{PREFIX}}compileSdk=${compileSdk}::buildTools=${buildTools}::ndk=${ndkVersion}"
+}
+
+// allprojects { afterEvaluate { ... } } reaches across the project graph, which
+// Isolated Projects forbids. gradle.lifecycle.afterProject (Gradle 8.7+) is the
+// isolation-safe per-project replacement; older Gradle falls back to allprojects.
+if (org.gradle.util.GradleVersion.current() >= org.gradle.util.GradleVersion.version('8.7')) {
+    gradle.lifecycle.afterProject { project ->
+        emit(project)
+    }
+} else {
+    allprojects {
+        afterEvaluate { project ->
+            emit(project)
         }
     }
 }

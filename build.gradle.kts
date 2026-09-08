@@ -13,6 +13,18 @@ allprojects {
 }
 
 subprojects {
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            }
+            jvmToolchain(17)
+        }
+    }
+    tasks.withType<JavaCompile>().configureEach {
+        options.release.set(17)
+    }
+
     apply(
         plugin =
             rootProject.libs.plugins.ktlint

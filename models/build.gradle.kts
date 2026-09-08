@@ -5,6 +5,7 @@ plugins {
 }
 
 dependencies {
+    implementation(libs.gradle.tooling)
     testImplementation(kotlin("test"))
 }
 
