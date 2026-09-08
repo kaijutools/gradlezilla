@@ -2,7 +2,6 @@ package tools.kaiju.gradlezilla.cli.format
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
-import tools.kaiju.gradlezilla.cli.BuildConfig
 import tools.kaiju.gradlezilla.models.AndroidProjectSpec
 
 sealed class GenerateFormatter {
@@ -47,45 +46,30 @@ sealed class GenerateFormatter {
             dockerfile: String,
             outputPath: String?,
         ): String {
-            val sarifLog =
-                buildJsonObject {
-                    put("\$schema", "https://json.schemastore.org/sarif-2.1.0")
-                    put("version", "2.1.0")
+            val log =
+                sarifLog {
                     put(
-                        "runs",
+                        "artifacts",
                         buildJsonArray {
                             addJsonObject {
-                                putJsonObject("tool") {
-                                    putJsonObject("driver") {
-                                        put("name", "gradlezilla")
-                                        put("version", BuildConfig.VERSION)
-                                    }
-                                }
-                                put(
-                                    "artifacts",
-                                    buildJsonArray {
-                                        addJsonObject {
-                                            putJsonObject("location") { put("uri", "Dockerfile") }
-                                            putJsonObject("contents") { put("text", dockerfile) }
-                                        }
-                                    },
-                                )
-                                put("results", buildJsonArray {})
-                                putJsonObject("properties") {
-                                    put("jdkVersion", spec.jdkVersion)
-                                    put("androidSdkVersion", spec.androidSdkVersion)
-                                    put("androidCommandLineToolsVersion", spec.androidCommandLineToolsVersion)
-                                    put("androidPlatformToolsVersion", spec.androidPlatformToolsVersion)
-                                    put("androidNdkVersion", spec.androidNdkVersion)
-                                    put("androidCmakeVersion", spec.androidCmakeVersion)
-                                    put("gradleVersion", spec.gradleVersion)
-                                    put("outputPath", outputPath)
-                                }
+                                putJsonObject("location") { put("uri", "Dockerfile") }
+                                putJsonObject("contents") { put("text", dockerfile) }
                             }
                         },
                     )
+                    put("results", buildJsonArray {})
+                    putJsonObject("properties") {
+                        put("jdkVersion", spec.jdkVersion)
+                        put("androidSdkVersion", spec.androidSdkVersion)
+                        put("androidCommandLineToolsVersion", spec.androidCommandLineToolsVersion)
+                        put("androidPlatformToolsVersion", spec.androidPlatformToolsVersion)
+                        put("androidNdkVersion", spec.androidNdkVersion)
+                        put("androidCmakeVersion", spec.androidCmakeVersion)
+                        put("gradleVersion", spec.gradleVersion)
+                        put("outputPath", outputPath)
+                    }
                 }
-            return json.encodeToString(sarifLog)
+            return json.encodeToString(log)
         }
     }
 

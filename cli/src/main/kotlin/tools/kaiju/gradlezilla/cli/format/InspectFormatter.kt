@@ -1,7 +1,6 @@
 package tools.kaiju.gradlezilla.cli.format
 
 import kotlinx.serialization.json.*
-import tools.kaiju.gradlezilla.cli.BuildConfig
 import tools.kaiju.gradlezilla.inspector.BuildTarget
 
 sealed class InspectFormatter {
@@ -37,62 +36,41 @@ sealed class InspectFormatter {
         private val json = Json { prettyPrint = true }
 
         override fun format(targets: List<BuildTarget>): String {
-            val sarifLog =
-                buildJsonObject {
-                    put("\$schema", "https://json.schemastore.org/sarif-2.1.0")
-                    put("version", "2.1.0")
+            val log =
+                sarifLog {
                     put(
-                        "runs",
+                        "results",
                         buildJsonArray {
-                            addJsonObject {
-                                put(
-                                    "tool",
-                                    buildJsonObject {
-                                        put(
-                                            "driver",
-                                            buildJsonObject {
-                                                put("name", "gradlezilla")
-                                                put("version", BuildConfig.VERSION)
-                                            },
-                                        )
-                                    },
-                                )
-                                put(
-                                    "results",
-                                    buildJsonArray {
-                                        for (target in targets) {
-                                            addJsonObject {
-                                                put("ruleId", "build-target")
-                                                put("kind", "informational")
-                                                put(
-                                                    "message",
-                                                    buildJsonObject {
-                                                        val desc =
-                                                            if (target.description != null) {
-                                                                " - ${target.description}"
-                                                            } else {
-                                                                ""
-                                                            }
-                                                        put("text", "${target.path}$desc")
-                                                    },
-                                                )
-                                                put(
-                                                    "properties",
-                                                    buildJsonObject {
-                                                        put("name", target.name)
-                                                        put("path", target.path)
-                                                        put("group", target.group)
-                                                    },
-                                                )
-                                            }
-                                        }
-                                    },
-                                )
+                            for (target in targets) {
+                                addJsonObject {
+                                    put("ruleId", "build-target")
+                                    put("kind", "informational")
+                                    put(
+                                        "message",
+                                        buildJsonObject {
+                                            val desc =
+                                                if (target.description != null) {
+                                                    " - ${target.description}"
+                                                } else {
+                                                    ""
+                                                }
+                                            put("text", "${target.path}$desc")
+                                        },
+                                    )
+                                    put(
+                                        "properties",
+                                        buildJsonObject {
+                                            put("name", target.name)
+                                            put("path", target.path)
+                                            put("group", target.group)
+                                        },
+                                    )
+                                }
                             }
                         },
                     )
                 }
-            return json.encodeToString(sarifLog)
+            return json.encodeToString(log)
         }
     }
 

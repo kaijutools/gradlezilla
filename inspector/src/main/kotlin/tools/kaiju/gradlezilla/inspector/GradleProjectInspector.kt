@@ -12,14 +12,13 @@ import java.io.File
 
 class GradleProjectInspector(
     private val projectDir: File,
-) {
     private val extractors: List<AgpDataExtractor> =
         listOf(
             InitScriptExtractor(),
             VersionCatalogExtractor(),
             StaticBuildFileExtractor(),
-        )
-
+        ),
+) {
     @Throws(GradleInspectorException::class)
     fun targets(): List<BuildTarget> {
         validateGradleProject()
@@ -106,11 +105,18 @@ class GradleProjectInspector(
         }
     }
 
+    @Suppress("TooGenericExceptionCaught")
     @Throws(GradleInspectorException::class)
     internal fun executeExtractionChain(context: ExtractionContext): AgpData {
         val attempts = mutableListOf<Pair<String, ExtractionOutcome>>()
         for (extractor in extractors) {
-            when (val outcome = extractor.extract(context)) {
+            val outcome =
+                try {
+                    extractor.extract(context)
+                } catch (e: Exception) {
+                    ExtractionOutcome.Failed("${extractor.name} threw an unexpected error", e)
+                }
+            when (outcome) {
                 is ExtractionOutcome.Found -> return outcome.data
                 else -> attempts += extractor.name to outcome
             }
