@@ -2,6 +2,9 @@ name: Repository Matrix Test
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   test-repo:
@@ -89,6 +92,7 @@ jobs:
       - name: Checkout Gradlezilla
         uses: actions/checkout@v6
         with:
+          ref: main
           ssh-key: ${{ secrets.MATRIX_README_DEPLOY_KEY }}
 
       - name: Download all results
@@ -100,7 +104,11 @@ jobs:
 
       - name: Compile Markdown Table
         run: |
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          COMMIT_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
           {
+            echo "Last verified at commit [\`$SHORT_SHA\`]($COMMIT_URL)."
+            echo
             echo "| Repository | Status |"
             echo "|---|---|"
             cat results/*.md
@@ -109,7 +117,7 @@ jobs:
           cat matrix-table.md >> $GITHUB_STEP_SUMMARY
 
       - name: Update README
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         run: |
           python3 - <<'PY'
           import re, pathlib
@@ -127,7 +135,7 @@ jobs:
           PY
 
       - name: Commit and push README
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
