@@ -30,6 +30,10 @@ Or run it straight from Gradle without installing:
 ./gradlew :cli:run --args="inspect <projectDir>"
 ```
 
+**Caveat:** `:cli:run` always executes under this project's pinned JDK 17
+toolchain and ignores `JAVA_HOME`. If `<projectDir>` needs a different JDK,
+use the installed launcher instead — it honors `JAVA_HOME` normally.
+
 ## Arguments
 
 - `<projectDir>` — path to the Gradle project root (must exist and be a directory).

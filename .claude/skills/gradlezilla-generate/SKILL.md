@@ -35,6 +35,10 @@ You can also run it straight from Gradle without installing:
 ./gradlew :cli:run --args="generate <projectDir> --dry-run"
 ```
 
+**Caveat:** `:cli:run` always executes under this project's pinned JDK 17
+toolchain and ignores `JAVA_HOME`. If `<projectDir>` needs a different JDK,
+use the installed launcher instead — it honors `JAVA_HOME` normally.
+
 ## Arguments & flags
 
 - `<projectDir>` — path to the Android project root (must exist and be a directory).

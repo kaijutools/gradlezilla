@@ -59,6 +59,12 @@ These are the runtime subcommands exposed by the built application. Run them
 either through the Gradle `:cli:run` task or via the installed launcher
 (`cli/build/install/gradlezilla/bin/gradlezilla`, after `./gradlew :cli:installDist`).
 
+> **Note:** `:cli:run` always executes under this project's pinned JDK 17
+> toolchain (see root `build.gradle.kts`) and ignores `JAVA_HOME`. Prefer the
+> installed launcher when running `generate`/`inspect` against a project that
+> may need a different JDK — it has no toolchain of its own and honors
+> `JAVA_HOME` normally.
+
 ### `generate <projectDir> [--dry-run|-d]`
 
 Inspects the Android project at `<projectDir>`, infers its toolchain
