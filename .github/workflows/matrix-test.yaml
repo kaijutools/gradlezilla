@@ -85,11 +85,11 @@ jobs:
     needs: test-repo
     if: always()
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout Gradlezilla
         uses: actions/checkout@v6
+        with:
+          ssh-key: ${{ secrets.MATRIX_README_DEPLOY_KEY }}
 
       - name: Download all results
         uses: actions/download-artifact@v8
