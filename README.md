@@ -76,7 +76,14 @@ Gradlezilla uses a hybrid **Static Analysis Chain of Responsibility**:
 Results from the latest [Repository Matrix Test](.github/workflows/matrix-test.yaml) run on `main`.
 
 <!-- MATRIX-TABLE:START -->
-_Run the Matrix Test workflow to populate this table._
+| Repository | Status |
+|---|---|
+| Sunflower | ✅ Success |
+| Now In Android | ✅ Success |
+| Timber | ✅ Success |
+| Signal | ✅ Success |
+| Wikipedia | ✅ Success |
+
 <!-- MATRIX-TABLE:END -->
 
 ## 🤝 Contributing
