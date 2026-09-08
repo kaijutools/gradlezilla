@@ -71,6 +71,14 @@ Gradlezilla uses a hybrid **Static Analysis Chain of Responsibility**:
 2. **AST Parsing:** It safely parses `build.gradle.kts` ASTs to find exact `compileSdk`, `buildToolsVersion`, and `ndkVersion` declarations.
 3. **Environment Generation:** It synthesizes these requirements into a dynamic `sdkmanager` bash command that installs only what your project strictly requires—nothing more, nothing less.
 
+## 📊 Matrix Test Status
+
+Results from the latest [Repository Matrix Test](.github/workflows/matrix-test.yaml) run on `main`.
+
+<!-- MATRIX-TABLE:START -->
+_Run the Matrix Test workflow to populate this table._
+<!-- MATRIX-TABLE:END -->
+
 ## 🤝 Contributing
 
 Pull requests are welcome! If Gradlezilla fails to parse a specific repository structure, please open an issue with a link to the public repo or a snippet of the `build.gradle` file.
