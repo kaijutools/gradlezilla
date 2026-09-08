@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload Generated Dockerfile
         if: steps.run-cli.outputs.status == '✅ Success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dockerfile-${{ strategy.job-index }}
           path: target-repo/Dockerfile
