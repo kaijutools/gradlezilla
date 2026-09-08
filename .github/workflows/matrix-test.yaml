@@ -12,11 +12,23 @@ jobs:
       fail-fast: false
       matrix:
         repo:
-          - { name: 'Sunflower', url: 'https://github.com/android/sunflower.git'}
-          - { name: 'Now In Android', url: 'https://github.com/android/nowinandroid.git'}
-          - { name: 'Timber', url: 'https://github.com/JakeWharton/timber.git'}
-          - { name: 'Signal', url: 'https://github.com/signalapp/Signal-Android.git' }
-          - { name: 'Wikipedia', url: 'https://github.com/wikimedia/apps-android-wikipedia.git' }
+          - {
+              name: "Sunflower",
+              url: "https://github.com/android/sunflower.git",
+            }
+          - {
+              name: "Now In Android",
+              url: "https://github.com/android/nowinandroid.git",
+            }
+          - { name: "Timber", url: "https://github.com/JakeWharton/timber.git" }
+          - {
+              name: "Signal",
+              url: "https://github.com/signalapp/Signal-Android.git",
+            }
+          - {
+              name: "Wikipedia",
+              url: "https://github.com/wikimedia/apps-android-wikipedia.git",
+            }
 
     steps:
       - name: Checkout Gradlezilla
@@ -62,7 +74,7 @@ jobs:
           echo "| ${{ matrix.repo.name }} | ${{ steps.run-cli.outputs.status }} |" > result-${{ strategy.job-index }}.md
 
       - name: Upload Result Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-result-${{ strategy.job-index }}
           path: result-${{ strategy.job-index }}.md
@@ -75,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download all results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: test-result-*
           merge-multiple: true
