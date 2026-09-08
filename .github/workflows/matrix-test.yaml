@@ -31,10 +31,19 @@ jobs:
       - name: Clone Target Repository
         run: git clone --depth 1 ${{ matrix.repo.url }} target-repo
 
+      - name: Build Gradlezilla
+        run: ./gradlew :cli:installDist
+
       - name: Run Gradlezilla
         id: run-cli
         run: |
-          if ./gradlew :cli:run --args="generate $PWD/target-repo"; then
+          # Invoke the installed distribution directly rather than `./gradlew :cli:run` —
+          # this project's own build.gradle.kts pins all subprojects to a JDK 17
+          # toolchain, so a Gradle-managed run task ignores JAVA_HOME entirely and
+          # always executes under JDK 17 regardless of what setup-java installs here.
+          # The installed script has no such toolchain and honors JAVA_HOME, which is
+          # what lets a target repo's own JDK requirements actually take effect.
+          if cli/build/install/gradlezilla/bin/gradlezilla generate "$PWD/target-repo"; then
             echo "status=✅ Success" >> $GITHUB_OUTPUT
           else
             echo "status=❌ Failed" >> $GITHUB_OUTPUT

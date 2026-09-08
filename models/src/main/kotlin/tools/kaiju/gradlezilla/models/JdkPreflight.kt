@@ -30,15 +30,14 @@ object JdkPreflight {
             appendLine()
             appendLine("Set JAVA_HOME to a compatible JDK and retry:")
             appendLine()
-            appendLine("  $suggestion")
+            appendLine("  ${suggestion(problem.maxSupportedJdk)}")
         }
     }
 
-    private val suggestion: String
-        get() =
-            if (System.getProperty("os.name").startsWith("Mac")) {
-                "JAVA_HOME=\$(/usr/libexec/java_home -v 17) gradlezilla generate ."
-            } else {
-                "JAVA_HOME=/path/to/jdk17 gradlezilla generate ."
-            }
+    private fun suggestion(maxSupportedJdk: Int): String =
+        if (System.getProperty("os.name").startsWith("Mac")) {
+            "JAVA_HOME=\$(/usr/libexec/java_home -v $maxSupportedJdk) gradlezilla generate ."
+        } else {
+            "JAVA_HOME=/path/to/jdk$maxSupportedJdk gradlezilla generate ."
+        }
 }
