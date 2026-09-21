@@ -15,4 +15,5 @@ data class AndroidProjectSpec(
     val modules: List<ModuleSpec> = emptyList(),
     val hasBuildSrc: Boolean = false,
     val hasBuildLogic: Boolean = false,
+    val extractionMetadata: ExtractionMetadata? = null,
 )

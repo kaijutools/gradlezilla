@@ -1,11 +1,10 @@
 package tools.kaiju.gradlezilla.models
 
-import org.gradle.tooling.ProjectConnection
 import java.io.File
 
 data class ExtractionContext(
     val projectDir: File,
-    val connection: ProjectConnection,
+    val connection: PinnedConnection,
     val environment: GradleProjectEnvironment,
 )
 
