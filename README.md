@@ -86,6 +86,18 @@ Results from the latest [Repository Matrix Test](.github/workflows/matrix-test.y
 
 <!-- MATRIX-TABLE:END -->
 
+## ⚠️ Known Limitations
+
+Gradlezilla runs every Gradle Tooling API connection against an isolated, persistent Gradle
+user home (`~/.gradlezilla/gradle-home`, overridable via `GRADLEZILLA_GRADLE_HOME`) so its
+daemon never gets mixed up with ones spawned by Android Studio or other projects. The first
+run against a given Gradle version warms this cache (downloading the distribution) and will
+be noticeably slower; a one-line notice is printed to stderr when this happens. Subsequent
+runs reuse it.
+
+CI users should cache the `GRADLEZILLA_GRADLE_HOME` directory between runs to avoid paying
+the warm-up cost on every job.
+
 ## 🤝 Contributing
 
 Pull requests are welcome! If Gradlezilla fails to parse a specific repository structure, please open an issue with a link to the public repo or a snippet of the `build.gradle` file.
