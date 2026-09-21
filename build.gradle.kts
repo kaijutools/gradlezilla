@@ -1,3 +1,7 @@
+import io.gitlab.arturbosch.detekt.extensions.DetektExtension
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension
+
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.ktlint) apply false
@@ -14,9 +18,9 @@ allprojects {
 
 subprojects {
     plugins.withId("org.jetbrains.kotlin.jvm") {
-        extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
+        extensions.configure<KotlinJvmProjectExtension> {
             compilerOptions {
-                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                jvmTarget.set(JVM_17)
             }
             jvmToolchain(17)
         }
@@ -39,7 +43,7 @@ subprojects {
     )
 
     // Tell Kotlin explicitly what type of extension to configure
-    extensions.configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
+    extensions.configure<DetektExtension> {
         config.setFrom(files("$rootDir/detekt-config.yaml"))
         buildUponDefaultConfig = true
     }
