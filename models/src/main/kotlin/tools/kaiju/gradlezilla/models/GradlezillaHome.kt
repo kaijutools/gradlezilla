@@ -10,6 +10,7 @@ import org.gradle.tooling.ProjectConnection
 import java.io.File
 import java.io.FileDescriptor
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.PrintStream
 
 /**
@@ -38,22 +39,33 @@ object GradlezillaHome {
         ownershipProblem(dir)?.let { return Prepared.Rejected(it) }
 
         val isFirstRun = !dir.exists()
-        dir.mkdirs()
 
-        // No org.gradle.jvmargs here: user-home properties override the project's, which
-        // would drop repos' metaspace/GC flags and blow past the CI worker's memory budget.
-        File(dir, PROPERTIES_FILE_NAME).writeText(
-            "org.gradle.daemon.idletimeout=$IDLE_TIMEOUT_MS\n",
-        )
-        File(dir, MARKER_FILE_NAME).takeIf { !it.isFile }?.writeText("")
+        return try {
+            if (!dir.exists() && !dir.mkdirs()) {
+                return Prepared.Rejected("Could not create Gradle home directory '$dir'")
+            }
 
-        if (isFirstRun) {
-            System.err.println(
-                "gradlezilla: warming Gradle cache at $dir — this run will be slower than usual",
+            // Marker written before gradle.properties: a process interrupted between the two
+            // writes leaves a marked-but-incomplete home that the next invocation can safely
+            // finish, rather than an unmarked, non-empty home that gets rejected as foreign.
+            File(dir, MARKER_FILE_NAME).takeIf { !it.isFile }?.writeText("")
+
+            // No org.gradle.jvmargs here: user-home properties override the project's, which
+            // would drop repos' metaspace/GC flags and blow past the CI worker's memory budget.
+            File(dir, PROPERTIES_FILE_NAME).writeText(
+                "org.gradle.daemon.idletimeout=$IDLE_TIMEOUT_MS\n",
             )
-        }
 
-        return Prepared.Ready(dir, isFirstRun)
+            if (isFirstRun) {
+                System.err.println(
+                    "gradlezilla: warming Gradle cache at $dir — this run will be slower than usual",
+                )
+            }
+
+            Prepared.Ready(dir, isFirstRun)
+        } catch (e: IOException) {
+            Prepared.Rejected("Could not write Gradle home config in '$dir': ${e.message}")
+        }
     }
 
     private fun resolveDir(): File =
