@@ -90,10 +90,11 @@ Results from the latest [Repository Matrix Test](.github/workflows/matrix-test.y
 
 Gradlezilla runs every Gradle Tooling API connection against an isolated, persistent Gradle
 user home (`~/.gradlezilla/gradle-home`, overridable via `GRADLEZILLA_GRADLE_HOME`) so its
-daemon never gets mixed up with ones spawned by Android Studio or other projects. The first
-run against a given Gradle version warms this cache (downloading the distribution) and will
-be noticeably slower; a one-line notice is printed to stderr when this happens. Subsequent
-runs reuse it.
+daemon never gets mixed up with ones spawned by Android Studio or other projects. The very
+first run creates this home and prints a one-line notice to stderr; that run — and any later
+run that needs a Gradle distribution it hasn't downloaded yet — will be noticeably slower
+while the distribution downloads. Once a given Gradle version has been used once, subsequent
+runs against it reuse the cached distribution.
 
 CI users should cache the `GRADLEZILLA_GRADLE_HOME` directory between runs to avoid paying
 the warm-up cost on every job.
