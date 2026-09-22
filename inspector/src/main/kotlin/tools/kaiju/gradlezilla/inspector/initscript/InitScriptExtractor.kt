@@ -3,6 +3,7 @@ package tools.kaiju.gradlezilla.inspector.initscript
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
 import tools.kaiju.gradlezilla.models.ExtractionOutcome
+import tools.kaiju.gradlezilla.models.GradleVersion
 import tools.kaiju.gradlezilla.models.InitScriptOutputParser
 import tools.kaiju.gradlezilla.models.JdkFactsParser
 import tools.kaiju.gradlezilla.models.ModuleJdkFacts
@@ -28,11 +29,8 @@ class InitScriptExtractor : AgpDataExtractor {
             context.connection
                 .build()
                 .forTasks("help")
-                .withArguments(
-                    "--init-script",
-                    initScriptFile.absolutePath,
-                    "-q",
-                ).setStandardOutput(outputStream)
+                .withArguments(buildArguments(initScriptFile, context.environment.gradleVersion))
+                .setStandardOutput(outputStream)
                 .setStandardError(errorStream)
                 .run()
 
@@ -72,6 +70,22 @@ class InitScriptExtractor : AgpDataExtractor {
         }
     }
 
+    /**
+     * The configuration cache lives in the target project's own directory, not our isolated
+     * Gradle user home — so a pre-existing entry (from the project's own dev workflow, CI, or a
+     * prior gradlezilla run) can silently skip the whole configuration phase, including this
+     * init script's data-emitting hooks, on any run after the first. `--no-configuration-cache`
+     * guarantees this build always reconfigures, but only exists from Gradle 6.6 onward — passing
+     * it to an older Gradle would fail the build outright, so it's added conditionally.
+     */
+    private fun buildArguments(
+        initScriptFile: File,
+        gradleVersion: String,
+    ): List<String> {
+        val base = listOf("--init-script", initScriptFile.absolutePath, "-q")
+        return if (supportsConfigurationCacheFlag(gradleVersion)) base + "--no-configuration-cache" else base
+    }
+
     private fun dumpDebugOutput(
         stdout: String,
         stderr: String,
@@ -102,3 +116,11 @@ class InitScriptExtractor : AgpDataExtractor {
         private const val JDK_PREFIX_TAG = "{{JDK_PREFIX}}"
     }
 }
+
+/** --configuration-cache/--no-configuration-cache: incubating since Gradle 6.6, stable in 8.1. */
+@Suppress("MagicNumber")
+private val MIN_CONFIGURATION_CACHE_FLAG_VERSION = GradleVersion(6, 6)
+
+/** Fails open (omits the flag) when [gradleVersion] can't be parsed, matching GradleJdkCompatibility. */
+internal fun supportsConfigurationCacheFlag(gradleVersion: String): Boolean =
+    GradleVersion.parse(gradleVersion)?.let { it >= MIN_CONFIGURATION_CACHE_FLAG_VERSION } ?: false
