@@ -54,6 +54,16 @@ class GenerateFormatterTest {
     }
 
     @Test
+    fun jsonFormat_specUsesAndroidBuildToolsVersionKey() {
+        val result = GenerateFormatter.JsonOutput.format(spec, dockerfile, outputPath = null)
+        val specObj = Json.parseToJsonElement(result).jsonObject["spec"]?.jsonObject
+        assertEquals("34.0.5", specObj?.get("androidBuildToolsVersion")?.jsonPrimitive?.content)
+        assert(specObj?.containsKey("androidPlatformToolsVersion") == false) {
+            "spec JSON must not contain the retired androidPlatformToolsVersion key"
+        }
+    }
+
+    @Test
     fun sarifFormat_hasCorrectVersion() {
         val result = GenerateFormatter.SarifOutput.format(spec, dockerfile, outputPath = null)
         val obj = Json.parseToJsonElement(result).jsonObject
@@ -77,6 +87,18 @@ class GenerateFormatterTest {
         val run = obj["runs"]?.jsonArray?.first()?.jsonObject
         val props = run?.get("properties")?.jsonObject
         assertEquals("34", props?.get("androidSdkVersion")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun sarifFormat_usesAndroidBuildToolsVersionKey() {
+        val result = GenerateFormatter.SarifOutput.format(spec, dockerfile, outputPath = null)
+        val obj = Json.parseToJsonElement(result).jsonObject
+        val run = obj["runs"]?.jsonArray?.first()?.jsonObject
+        val props = run?.get("properties")?.jsonObject
+        assertEquals("34.0.5", props?.get("androidBuildToolsVersion")?.jsonPrimitive?.content)
+        assert(props?.containsKey("androidPlatformToolsVersion") == false) {
+            "SARIF properties must not contain the retired androidPlatformToolsVersion key"
+        }
     }
 
     @Test
