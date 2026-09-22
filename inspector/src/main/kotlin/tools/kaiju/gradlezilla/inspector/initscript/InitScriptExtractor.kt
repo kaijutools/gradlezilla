@@ -1,11 +1,13 @@
 package tools.kaiju.gradlezilla.inspector.initscript
 
+import org.gradle.tooling.GradleConnectionException
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
 import tools.kaiju.gradlezilla.models.ExtractionOutcome
 import tools.kaiju.gradlezilla.models.InitScriptOutputParser
 import tools.kaiju.gradlezilla.models.JdkFactsParser
 import tools.kaiju.gradlezilla.models.ModuleJdkFacts
+import tools.kaiju.gradlezilla.models.rootCause
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -63,7 +65,10 @@ class InitScriptExtractor : AgpDataExtractor {
             }
         } catch (e: IOException) {
             dumpDebugOutput(outputStream.toString(), errorStream.toString())
-            ExtractionOutcome.Failed("Failed to extract with init script", e)
+            ExtractionOutcome.Failed("Failed to extract with init script: ${e.rootCause().message}", e)
+        } catch (e: GradleConnectionException) {
+            dumpDebugOutput(outputStream.toString(), errorStream.toString())
+            ExtractionOutcome.Failed("Failed to extract with init script: ${e.rootCause().message}", e)
         } finally {
             initScriptFile.delete()
         }
