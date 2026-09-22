@@ -20,7 +20,7 @@ class InitScriptExtractor : AgpDataExtractor {
 
         return try {
             context.connection
-                .newBuild()
+                .build()
                 .forTasks("help")
                 .withArguments(
                     "--init-script",

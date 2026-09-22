@@ -1,15 +1,16 @@
 package tools.kaiju.gradlezilla.inspector
 
+import org.gradle.tooling.BuildAction
 import org.gradle.tooling.BuildActionExecuter
-import org.gradle.tooling.ProjectConnection
-import org.gradle.tooling.ResultHandler
+import org.gradle.tooling.BuildLauncher
+import org.gradle.tooling.ModelBuilder
 import tools.kaiju.gradlezilla.models.AgpData
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
 import tools.kaiju.gradlezilla.models.ExtractionOutcome
 import tools.kaiju.gradlezilla.models.GradleProjectEnvironment
+import tools.kaiju.gradlezilla.models.PinnedConnection
 import java.io.File
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -33,33 +34,22 @@ private class NotApplicableExtractor : AgpDataExtractor {
     override fun extract(context: ExtractionContext): ExtractionOutcome = ExtractionOutcome.NotApplicable("n/a")
 }
 
-private object FakeProjectConnection : ProjectConnection {
-    override fun <T : Any?> getModel(viewType: Class<T>): T = error("not used in this test")
+private object FakePinnedConnection : PinnedConnection {
+    override val gradleUserHome: File = File(".")
 
-    override fun <T : Any?> getModel(
-        viewType: Class<T>,
-        handler: ResultHandler<in T>,
-    ) = error("not used in this test")
+    override fun <T : Any?> model(type: Class<T>): ModelBuilder<T> = error("not used in this test")
 
-    override fun newBuild() = error("not used in this test")
+    override fun <T : Any?> getModel(type: Class<T>): T = error("not used in this test")
 
-    override fun newTestLauncher() = error("not used in this test")
+    override fun <T : Any?> action(action: BuildAction<T>): BuildActionExecuter<T> = error("not used in this test")
 
-    override fun <T : Any?> model(modelType: Class<T>) = error("not used in this test")
-
-    override fun <T : Any?> action(buildAction: org.gradle.tooling.BuildAction<T>) = error("not used in this test")
-
-    override fun action(): BuildActionExecuter.Builder = error("not used in this test")
-
-    override fun notifyDaemonsAboutChangedPaths(changedPaths: MutableList<Path>) = error("not used in this test")
-
-    override fun close() = Unit
+    override fun build(): BuildLauncher = error("not used in this test")
 }
 
 private fun fakeContext(projectDir: File) =
     ExtractionContext(
         projectDir = projectDir,
-        connection = FakeProjectConnection,
+        connection = FakePinnedConnection,
         environment =
             GradleProjectEnvironment(
                 jdkVersion = 17,

@@ -1,8 +1,6 @@
 package tools.kaiju.gradlezilla.inspector
 
 import org.gradle.tooling.GradleConnectionException
-import org.gradle.tooling.GradleConnector
-import org.gradle.tooling.ProjectConnection
 import org.gradle.tooling.model.GradleProject
 import org.gradle.tooling.model.build.BuildEnvironment
 import tools.kaiju.gradlezilla.inspector.initscript.InitScriptExtractor
@@ -24,21 +22,17 @@ class GradleProjectInspector(
         validateGradleProject()
         JdkPreflight.check(projectDir)?.let { throw GradleInspectorException(it) }
 
-        return try {
-            connect().use { connection ->
-                val project = connection.getModel(GradleProject::class.java)
-                project.tasks
-                    .map { task ->
-                        BuildTarget(
-                            name = task.name,
-                            path = task.path,
-                            group = task.group?.takeIf { it.isNotBlank() },
-                            description = task.description?.takeIf { it.isNotBlank() },
-                        )
-                    }.sortedWith(compareBy({ it.group ?: "\uFFFF" }, { it.path }))
-            }
-        } catch (e: GradleInspectorException) {
-            throw GradleInspectorException(e.message ?: "Unknown error", e)
+        return connected { connection ->
+            val project = connection.getModel(GradleProject::class.java)
+            project.tasks
+                .map { task ->
+                    BuildTarget(
+                        name = task.name,
+                        path = task.path,
+                        group = task.group?.takeIf { it.isNotBlank() },
+                        description = task.description?.takeIf { it.isNotBlank() },
+                    )
+                }.sortedWith(compareBy({ it.group ?: "\uFFFF" }, { it.path }))
         }
     }
 
@@ -47,31 +41,37 @@ class GradleProjectInspector(
         validateGradleProject()
         JdkPreflight.check(projectDir)?.let { throw GradleInspectorException(it) }
 
-        return try {
-            connect().use { connection ->
-                val env = fetchEnvironment(connection)
-                val ctx = ExtractionContext(projectDir, connection, env)
-                val agpData = executeExtractionChain(ctx)
-                return AndroidProjectSpec(
-                    jdkVersion = env.jdkVersion,
-                    gradleVersion = env.gradleVersion,
-                    androidSdkVersion = agpData.compileSdk,
-                    androidPlatformToolsVersion = agpData.buildToolsVersion,
-                    androidNdkVersion = agpData.ndkVersion,
-                )
-            }
-        } catch (e: GradleInspectorException) {
-            throw GradleInspectorException(e.message ?: "Unknown error", e)
+        val javaHome = File(System.getProperty("java.home"))
+        return connected(javaHome) { connection ->
+            val env = fetchEnvironment(connection)
+            val ctx = ExtractionContext(projectDir, connection, env)
+            val agpData = executeExtractionChain(ctx)
+            AndroidProjectSpec(
+                jdkVersion = env.jdkVersion,
+                gradleVersion = env.gradleVersion,
+                androidSdkVersion = agpData.compileSdk,
+                androidPlatformToolsVersion = agpData.buildToolsVersion,
+                androidNdkVersion = agpData.ndkVersion,
+                extractionMetadata =
+                    ExtractionMetadata(
+                        gradleUserHome = connection.gradleUserHome.absolutePath,
+                        daemonJavaHome = javaHome.absolutePath,
+                    ),
+            )
         }
     }
 
+    /** Runs [block] against a single pinned Gradle Tooling API connection for this project. */
     @Throws(GradleInspectorException::class)
-    internal fun connect(): ProjectConnection =
+    private fun <T> connected(
+        javaHome: File = File(System.getProperty("java.home")),
+        block: (PinnedConnection) -> T,
+    ): T =
         try {
-            GradleConnector
-                .newConnector()
-                .forProjectDirectory(projectDir)
-                .connect()
+            when (val result = PinnedConnection.withConnection(projectDir, javaHome, block)) {
+                is PinnedConnectionResult.Success -> result.value
+                is PinnedConnectionResult.Rejected -> throw GradleInspectorException(result.reason)
+            }
         } catch (e: GradleConnectionException) {
             throw GradleInspectorException(
                 "Could not connect to Gradle project at '$projectDir': ${e::class.simpleName}::${e.message}",
@@ -80,7 +80,7 @@ class GradleProjectInspector(
         }
 
     @Throws(GradleInspectorException::class)
-    internal fun fetchEnvironment(connection: ProjectConnection): GradleProjectEnvironment {
+    internal fun fetchEnvironment(connection: PinnedConnection): GradleProjectEnvironment {
         val hasBuildSrc = File(projectDir, "buildSrc").isDirectory
         val hasBuildLogic = File(projectDir, "build-logic").isDirectory
 

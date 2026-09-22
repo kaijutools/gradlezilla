@@ -88,6 +88,19 @@ Last verified at commit [`ccbbc6e`](https://github.com/kaijutools/gradlezilla/co
 
 <!-- MATRIX-TABLE:END -->
 
+## ⚠️ Known Limitations
+
+Gradlezilla runs every Gradle Tooling API connection against an isolated, persistent Gradle
+user home (`~/.gradlezilla/gradle-home`, overridable via `GRADLEZILLA_GRADLE_HOME`) so its
+daemon never gets mixed up with ones spawned by Android Studio or other projects. The very
+first run creates this home and prints a one-line notice to stderr; that run — and any later
+run that needs a Gradle distribution it hasn't downloaded yet — will be noticeably slower
+while the distribution downloads. Once a given Gradle version has been used once, subsequent
+runs against it reuse the cached distribution.
+
+CI users should cache the `GRADLEZILLA_GRADLE_HOME` directory between runs to avoid paying
+the warm-up cost on every job.
+
 ## 🤝 Contributing
 
 Pull requests are welcome! If Gradlezilla fails to parse a specific repository structure, please open an issue with a link to the public repo or a snippet of the `build.gradle` file.
