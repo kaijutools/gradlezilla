@@ -10,6 +10,7 @@ import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.clikt.parameters.types.file
 import tools.kaiju.gradlezilla.cli.format.GenerateFormatter
 import tools.kaiju.gradlezilla.generator.DockerfileGenerator
+import tools.kaiju.gradlezilla.generator.LayeredDockerfileGenerator
 import tools.kaiju.gradlezilla.inspector.GradleInspectorException
 import tools.kaiju.gradlezilla.inspector.GradleProjectInspector
 import java.io.File
@@ -34,6 +35,13 @@ class Generate :
         help = "Print Dockerfile to console instead of writing to disk",
     ).flag(default = false)
 
+    private val layered by option(
+        "--layered",
+        help =
+            "Generate a multi-layer Dockerfile that resolves Gradle dependencies in a cacheable " +
+                "layer separate from application source, so source-only edits don't invalidate it",
+    ).flag(default = false)
+
     private val format by option(
         "--format",
         help = "Output format (human, json, sarif)",
@@ -52,7 +60,8 @@ class Generate :
                 throw UsageError(e.message ?: "Could not connect to Gradle Project at '$projectDir'.")
             }
 
-        val dockerfile = DockerfileGenerator().generate(spec)
+        val generator = if (layered) LayeredDockerfileGenerator() else DockerfileGenerator()
+        val dockerfile = generator.generate(spec)
 
         val outputPath = resolveOutputPath(projectDir, dockerfile, dryRun)
 
