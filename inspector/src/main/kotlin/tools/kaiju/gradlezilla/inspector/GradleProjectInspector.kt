@@ -50,7 +50,7 @@ class GradleProjectInspector(
                 jdkVersion = env.jdkVersion,
                 gradleVersion = env.gradleVersion,
                 androidSdkVersion = agpData.compileSdk,
-                androidPlatformToolsVersion = agpData.buildToolsVersion,
+                androidBuildToolsVersion = agpData.buildToolsVersion,
                 androidNdkVersion = agpData.ndkVersion,
                 extractionMetadata =
                     ExtractionMetadata(

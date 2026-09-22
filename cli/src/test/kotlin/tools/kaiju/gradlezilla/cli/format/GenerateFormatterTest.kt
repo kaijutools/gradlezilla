@@ -16,7 +16,7 @@ class GenerateFormatterTest {
             jdkVersion = 17,
             androidSdkVersion = 34,
             androidCommandLineToolsVersion = "11076708",
-            androidPlatformToolsVersion = "34.0.5",
+            androidBuildToolsVersion = "34.0.5",
             androidNdkVersion = null,
             gradleVersion = "8.4",
         )

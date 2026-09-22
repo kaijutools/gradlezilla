@@ -11,7 +11,7 @@ class DockerfileGenerator : Generator {
         val sdkPackages =
             buildList {
                 add("\"platforms;android-${spec.androidSdkVersion}\"")
-                add("\"build-tools;${spec.androidPlatformToolsVersion ?: DEFAULT_BUILD_TOOLS_VERSION}\"")
+                add("\"build-tools;${spec.androidBuildToolsVersion ?: DEFAULT_BUILD_TOOLS_VERSION}\"")
                 spec.androidNdkVersion?.let { add("\"ndk;$it\"") }
             }.joinToString(" ")
 

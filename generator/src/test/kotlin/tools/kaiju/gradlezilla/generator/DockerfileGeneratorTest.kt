@@ -12,7 +12,7 @@ class DockerfileGeneratorTest {
         AndroidProjectSpec(
             jdkVersion = 17,
             androidSdkVersion = 34,
-            androidPlatformToolsVersion = "34.0.5",
+            androidBuildToolsVersion = "34.0.5",
             androidCommandLineToolsVersion = "11076708",
         )
 
@@ -72,13 +72,13 @@ class DockerfileGeneratorTest {
     }
 
     @Test
-    fun `sdk packages include build-tools for androidPlatformToolsVersion`() {
+    fun `sdk packages include build-tools for androidBuildToolsVersion`() {
         assertTrue(render().contains("build-tools;34.0.5"))
     }
 
     @Test
     fun `sdk packages default build-tools when null`() {
-        val output = render(baseSpec.copy(androidPlatformToolsVersion = null))
+        val output = render(baseSpec.copy(androidBuildToolsVersion = null))
         assertTrue(output.contains("build-tools;34.0.0"))
     }
 
