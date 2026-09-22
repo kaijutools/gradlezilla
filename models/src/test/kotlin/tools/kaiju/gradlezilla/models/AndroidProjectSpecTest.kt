@@ -8,7 +8,7 @@ class AndroidProjectSpecTest {
     private val baseSpec =
         AndroidProjectSpec(
             androidSdkVersion = 34,
-            androidPlatformToolsVersion = "34.0.5",
+            androidBuildToolsVersion = "34.0.5",
             androidCommandLineToolsVersion = "11076708",
         )
 
@@ -18,18 +18,18 @@ class AndroidProjectSpecTest {
             AndroidProjectSpec(
                 jdkVersion = 17,
                 androidSdkVersion = 34,
-                androidPlatformToolsVersion = "34.0.5",
+                androidBuildToolsVersion = "34.0.5",
                 androidCommandLineToolsVersion = "11076708",
             )
         assertEquals(17, spec.jdkVersion)
         assertEquals(34, spec.androidSdkVersion)
-        assertEquals("34.0.5", spec.androidPlatformToolsVersion)
+        assertEquals("34.0.5", spec.androidBuildToolsVersion)
         assertEquals("11076708", spec.androidCommandLineToolsVersion)
     }
 
     @Test
     fun `androidCommandLineToolsVersion is null when not provided`() {
-        val spec = AndroidProjectSpec(androidSdkVersion = 34, androidPlatformToolsVersion = "34.0.5")
+        val spec = AndroidProjectSpec(androidSdkVersion = 34, androidBuildToolsVersion = "34.0.5")
         assertNull(spec.androidCommandLineToolsVersion)
     }
 

@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class AndroidProjectSpec(
     val jdkVersion: Int = 17,
     val androidSdkVersion: Int,
-    val androidPlatformToolsVersion: String? = null,
+    val androidBuildToolsVersion: String? = null,
     val androidCommandLineToolsVersion: String? = null,
     val androidNdkVersion: String? = null,
     val androidCmakeVersion: String? = null,

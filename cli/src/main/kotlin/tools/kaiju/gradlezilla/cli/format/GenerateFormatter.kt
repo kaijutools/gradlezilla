@@ -62,7 +62,7 @@ sealed class GenerateFormatter {
                         put("jdkVersion", spec.jdkVersion)
                         put("androidSdkVersion", spec.androidSdkVersion)
                         put("androidCommandLineToolsVersion", spec.androidCommandLineToolsVersion)
-                        put("androidPlatformToolsVersion", spec.androidPlatformToolsVersion)
+                        put("androidBuildToolsVersion", spec.androidBuildToolsVersion)
                         put("androidNdkVersion", spec.androidNdkVersion)
                         put("androidCmakeVersion", spec.androidCmakeVersion)
                         put("gradleVersion", spec.gradleVersion)
@@ -88,7 +88,7 @@ private fun AndroidProjectSpec.humanSummary(): String =
         add("JDK: $jdkVersion")
         add("CLI tools: $androidCommandLineToolsVersion")
         add("Android sdk: $androidSdkVersion")
-        add("Platform tools: $androidPlatformToolsVersion")
+        add("Build tools: $androidBuildToolsVersion")
         add("Ndk: $androidNdkVersion")
     }.joinToString("\n")
 
