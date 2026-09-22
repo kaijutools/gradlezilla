@@ -10,8 +10,69 @@ def emit = { project ->
     def buildTools = androidExt.hasProperty('buildToolsVersion') ? androidExt.buildToolsVersion : null
     def ndkVersion = androidExt.hasProperty('ndkVersion') ? androidExt.ndkVersion : null
 
+    def agpVersion = null
+    try {
+        // androidExt (not project) so the lookup happens on AGP's own plugin classloader —
+        // project.class.classLoader is Gradle core's, which never sees AGP's classes.
+        agpVersion = androidExt.class.classLoader.loadClass('com.android.Version')
+                .getField('ANDROID_GRADLE_PLUGIN_VERSION').get(null)
+    } catch (Throwable ignored) {
+        // AGP not resolvable this way — leave null, AGP-minimum-JDK fallback simply won't
+        // have a version to work with for this project.
+    }
+
     // {{PREFIX}} will be replaced at runtime
-    println "{{PREFIX}}compileSdk=${compileSdk}::buildTools=${buildTools}::ndk=${ndkVersion}"
+    println "{{PREFIX}}compileSdk=${compileSdk}::buildTools=${buildTools}::ndk=${ndkVersion}::agpVersion=${agpVersion}"
+}
+
+// Runs for every project, Android or not — a plain Kotlin/Java module can still pin a JDK
+// via a toolchain, which feeds JdkResolver.
+//
+// Deliberately NOT reading plain JavaPluginExtension.targetCompatibility/sourceCompatibility
+// here: unlike toolchain's Property<JavaLanguageVersion> (absent unless explicitly set), those
+// fields eagerly default to JavaVersion.current() — the JVM running the daemon — when a build
+// doesn't configure them. Trusting that value would silently reintroduce host-JVM dependence,
+// which is exactly the bug this extraction exists to avoid. Confirmed empirically: a module
+// with no explicit compatibility setting reported whatever JDK the extracting daemon ran on.
+def emitJdk = { project ->
+    def androidExt = project.extensions.findByName('android')
+
+    def javaExt = project.extensions.findByType(org.gradle.api.plugins.JavaPluginExtension)
+    def toolchain = null
+    def javaTarget = null
+    try {
+        toolchain = javaExt?.toolchain?.languageVersion?.orNull?.asInt()
+    } catch (Throwable ignored) { }
+    try {
+        javaTarget = androidExt?.compileOptions?.targetCompatibility?.majorVersion?.toInteger()
+    } catch (Throwable ignored) { }
+
+    def kotlinExt = project.extensions.findByName('kotlin')
+    def kotlinToolchain = null
+    def kotlinTarget = null
+    if (kotlinExt != null) {
+        try {
+            kotlinToolchain = kotlinExt.jvmToolchain?.get()?.languageVersion?.get()?.asInt()
+        } catch (Throwable ignored) { }
+        try {
+            kotlinTarget = kotlinExt.compilerOptions?.jvmTarget?.orNull?.target?.toInteger()
+        } catch (Throwable ignored) { }
+        if (kotlinTarget == null) {
+            try {
+                // Legacy Kotlin Gradle Plugin: kotlinOptions.jvmTarget on each compile task, e.g. "17".
+                kotlinTarget = project.tasks
+                        .withType(org.gradle.api.Task)
+                        .findAll { it.hasProperty('kotlinOptions') }
+                        .collect { it.kotlinOptions?.jvmTarget }
+                        .findAll { it != null }
+                        .collect { it.toInteger() }
+                        .max()
+            } catch (Throwable ignored) { }
+        }
+    }
+
+    // {{JDK_PREFIX}} will be replaced at runtime
+    println "{{JDK_PREFIX}}path=${project.path}::toolchain=${toolchain}::kotlinToolchain=${kotlinToolchain}::javaTarget=${javaTarget}::kotlinTarget=${kotlinTarget}"
 }
 
 // allprojects { afterEvaluate { ... } } reaches across the project graph, which
@@ -20,11 +81,13 @@ def emit = { project ->
 if (org.gradle.util.GradleVersion.current() >= org.gradle.util.GradleVersion.version('8.7')) {
     gradle.lifecycle.afterProject { project ->
         emit(project)
+        emitJdk(project)
     }
 } else {
     allprojects {
         afterEvaluate { project ->
             emit(project)
+            emitJdk(project)
         }
     }
 }

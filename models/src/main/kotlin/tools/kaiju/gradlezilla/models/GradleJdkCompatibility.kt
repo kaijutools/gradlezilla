@@ -64,5 +64,13 @@ data class GradleVersion(
             RE.find(url)?.destructured?.let { (maj, min) ->
                 GradleVersion(maj.toInt(), min.toInt())
             }
+
+        private val PLAIN_RE = Regex("""(\d+)\.(\d+)""")
+
+        /** Parses a plain version string like "8.4" → 8.4. Null if unrecognisable. */
+        fun parse(version: String): GradleVersion? =
+            PLAIN_RE.find(version)?.destructured?.let { (maj, min) ->
+                GradleVersion(maj.toInt(), min.toInt())
+            }
     }
 }
