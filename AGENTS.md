@@ -24,6 +24,29 @@ gradlezilla/
         └── Version.kt           # `version` subcommand
 ```
 
+## Git worktrees
+
+If you create a `git worktree` for this repo (e.g. to work on something in parallel with the
+main checkout), place it as a **sibling** of `main`, not nested inside it:
+
+```
+~/work/Kaiju/gradlezilla/
+├── main/            # the primary checkout
+└── worktrees/
+    ├── <name>/       # e.g. worktrees/cleanup-dockerfile-extractor
+    └── <name>/
+```
+
+```bash
+git worktree add -b <branch> ~/work/Kaiju/gradlezilla/worktrees/<name> [<start-point>]
+```
+
+Do **not** create worktrees under `main/.claude/worktrees/` (or anywhere else inside `main`'s
+own working tree) — a worktree nested inside the repo it was branched from shows up as an
+untracked directory in `git status`/`ls` of the main checkout, which is confusing and easy to
+accidentally `git add`. If one already exists there, relocate it with `git worktree move`
+(never a plain `mv` — that leaves git's internal worktree metadata pointing at the old path).
+
 ## Developer commands (Gradle)
 
 ```bash
