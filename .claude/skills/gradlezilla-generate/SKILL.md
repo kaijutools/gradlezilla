@@ -43,6 +43,8 @@ use the installed launcher instead — it honors `JAVA_HOME` normally.
 
 - `<projectDir>` — path to the Android project root (must exist and be a directory).
 - `--dry-run`, `-d` — print the Dockerfile to stdout instead of writing it to disk.
+- `--layered` — generate a multi-layer Dockerfile that resolves Gradle dependencies in a
+  layer separate from application source, so Docker's build cache survives source-only edits.
 
 ## Notes
 

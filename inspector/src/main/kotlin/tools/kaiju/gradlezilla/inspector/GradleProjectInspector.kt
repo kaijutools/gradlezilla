@@ -64,6 +64,9 @@ class GradleProjectInspector(
                 androidSdkVersion = agpData.compileSdk,
                 androidBuildToolsVersion = agpData.buildToolsVersion,
                 androidNdkVersion = agpData.ndkVersion,
+                modules = env.modules,
+                hasBuildSrc = env.hasBuildSrc,
+                hasBuildLogic = env.hasBuildLogic,
                 extractionMetadata =
                     ExtractionMetadata(
                         gradleUserHome = connection.gradleUserHome.absolutePath,
