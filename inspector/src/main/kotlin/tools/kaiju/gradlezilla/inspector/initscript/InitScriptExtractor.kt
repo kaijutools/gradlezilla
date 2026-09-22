@@ -3,7 +3,6 @@ package tools.kaiju.gradlezilla.inspector.initscript
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
 import tools.kaiju.gradlezilla.models.ExtractionOutcome
-import tools.kaiju.gradlezilla.models.GradleVersion
 import tools.kaiju.gradlezilla.models.InitScriptOutputParser
 import tools.kaiju.gradlezilla.models.JdkFactsParser
 import tools.kaiju.gradlezilla.models.ModuleJdkFacts
@@ -29,7 +28,7 @@ class InitScriptExtractor : AgpDataExtractor {
             context.connection
                 .build()
                 .forTasks("help")
-                .withArguments(buildArguments(initScriptFile, context.environment.gradleVersion))
+                .withArguments(buildInitScriptArguments(initScriptFile))
                 .setStandardOutput(outputStream)
                 .setStandardError(errorStream)
                 .run()
@@ -70,22 +69,6 @@ class InitScriptExtractor : AgpDataExtractor {
         }
     }
 
-    /**
-     * The configuration cache lives in the target project's own directory, not our isolated
-     * Gradle user home — so a pre-existing entry (from the project's own dev workflow, CI, or a
-     * prior gradlezilla run) can silently skip the whole configuration phase, including this
-     * init script's data-emitting hooks, on any run after the first. `--no-configuration-cache`
-     * guarantees this build always reconfigures, but only exists from Gradle 6.6 onward — passing
-     * it to an older Gradle would fail the build outright, so it's added conditionally.
-     */
-    private fun buildArguments(
-        initScriptFile: File,
-        gradleVersion: String,
-    ): List<String> {
-        val base = listOf("--init-script", initScriptFile.absolutePath, "-q")
-        return if (supportsConfigurationCacheFlag(gradleVersion)) base + "--no-configuration-cache" else base
-    }
-
     private fun dumpDebugOutput(
         stdout: String,
         stderr: String,
@@ -117,10 +100,28 @@ class InitScriptExtractor : AgpDataExtractor {
     }
 }
 
-/** --configuration-cache/--no-configuration-cache: incubating since Gradle 6.6, stable in 8.1. */
-@Suppress("MagicNumber")
-private val MIN_CONFIGURATION_CACHE_FLAG_VERSION = GradleVersion(6, 6)
+/** Must match the property name `extractor.gradle` reads at script top level. */
+internal const val CACHE_BUST_PROPERTY = "gradlezillaCacheBust"
 
-/** Fails open (omits the flag) when [gradleVersion] can't be parsed, matching GradleJdkCompatibility. */
-internal fun supportsConfigurationCacheFlag(gradleVersion: String): Boolean =
-    GradleVersion.parse(gradleVersion)?.let { it >= MIN_CONFIGURATION_CACHE_FLAG_VERSION } ?: false
+/**
+ * The configuration cache lives in the target project's own directory, not our isolated Gradle
+ * user home — so a pre-existing entry (from the project's own dev workflow, CI, or a prior
+ * gradlezilla run) can silently skip the whole configuration phase, including this init script's
+ * data-emitting hooks, on any run after the first.
+ *
+ * Disabling configuration cache outright (`--no-configuration-cache`) is not an option: Gradle's
+ * Isolated Projects feature *mandates* configuration cache and hard-fails
+ * ("Configuration Cache cannot be disabled when Isolated Projects is enabled") if you try —
+ * confirmed against a real Isolated-Projects project. Instead, a fresh random value is passed as
+ * a system property on every run; `extractor.gradle` reads it via `providers.systemProperty(...)`
+ * at script top level, which Gradle tracks as a configuration-cache input. A changed input always
+ * forces a full reconfiguration — busting the cache on every run without ever disabling it, so it
+ * works whether or not Isolated Projects is on, with no Gradle-version gating needed.
+ */
+internal fun buildInitScriptArguments(initScriptFile: File): List<String> =
+    listOf(
+        "--init-script",
+        initScriptFile.absolutePath,
+        "-q",
+        "-D$CACHE_BUST_PROPERTY=${UUID.randomUUID()}",
+    )

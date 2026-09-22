@@ -1,3 +1,10 @@
+// Reading this forces Gradle to always treat this build as needing a fresh configuration pass,
+// so the afterProject data hooks below can never be silently skipped by a reused
+// configuration-cache entry — without disabling configuration cache itself, which Isolated
+// Projects (org.gradle.isolated-projects) forbids outright. The property name must match
+// CACHE_BUST_PROPERTY in InitScriptExtractor.kt, which passes a fresh value on every run.
+providers.systemProperty('gradlezillaCacheBust').orNull
+
 def emit = { project ->
     def isAndroid = project.plugins.hasPlugin('com.android.application') ||
             project.plugins.hasPlugin('com.android.library')
