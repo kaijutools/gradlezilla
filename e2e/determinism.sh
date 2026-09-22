@@ -25,8 +25,9 @@ GRADLEZILLA_BIN="$REPO_ROOT/cli/build/install/gradlezilla/bin/gradlezilla"
 export GRADLEZILLA_GRADLE_HOME="$WORK_DIR/gradlezilla-home"
 
 cleanup() {
-    # Daemons spawned against WORK_DIR (gradlezilla's own, plus the ambient one) outlive this
-    # script until their idle timeout, holding lock files open — kill them first so rm can win.
+    # Daemons spawned against WORK_DIR (gradlezilla's own, plus the ambient one, both pointed
+    # at a GRADLE_USER_HOME under WORK_DIR) outlive this script until their idle timeout,
+    # holding lock files open — kill them first so rm can win.
     pkill -f "$WORK_DIR" 2>/dev/null || true
     sleep 1
     rm -rf "$WORK_DIR" 2>/dev/null || true
@@ -45,9 +46,9 @@ build_cli() {
     (cd "$REPO_ROOT" && ./gradlew :cli:installDist --console=plain) >&2
 }
 
-# Starts an ambient daemon under a JDK different from the one running this script,
-# in the DEFAULT (non-gradlezilla) Gradle user home — simulating a daemon Android
-# Studio or another project already left running.
+# Starts an ambient daemon under a JDK different from the one running this script, in its
+# own Gradle user home under WORK_DIR (kept separate from GRADLEZILLA_GRADLE_HOME) —
+# simulating a daemon Android Studio or another project already left running.
 start_ambient_daemon() {
     local ambient_jdk
     ambient_jdk="$(pick_ambient_jdk)"
@@ -64,14 +65,28 @@ start_ambient_daemon() {
     chmod +x "$ambient_project/gradlew"
     echo 'rootProject.name = "ambient"' >"$ambient_project/settings.gradle.kts"
 
-    log "Starting ambient daemon under JAVA_HOME=$ambient_jdk (default Gradle user home) ..."
-    (cd "$ambient_project" && JAVA_HOME="$ambient_jdk" ./gradlew help --console=plain) >&2
+    log "Starting ambient daemon under JAVA_HOME=$ambient_jdk ..."
+    (
+        cd "$ambient_project" &&
+            JAVA_HOME="$ambient_jdk" GRADLE_USER_HOME="$WORK_DIR/ambient-gradle-home" \
+                ./gradlew help --console=plain
+    ) >&2
+}
+
+# The JDK gradlezilla itself will run under — respects JAVA_HOME like the JVM launcher does,
+# rather than trusting `java` on PATH (which on macOS is often a /usr/bin/java dispatcher,
+# not the real JDK home).
+current_java_home() {
+    local java_bin="java"
+    [[ -n "${JAVA_HOME:-}" ]] && java_bin="$JAVA_HOME/bin/java"
+    "$java_bin" -XshowSettings:properties -version 2>&1 |
+        awk -F' = ' '/^ *java\.home/ {print $2}'
 }
 
 pick_ambient_jdk() {
     local running_home
-    running_home="$(cd "$(dirname "$(command -v java)")/.." && pwd)"
-    if ! command -v /usr/libexec/java_home >/dev/null 2>&1; then
+    running_home="$(current_java_home)"
+    if [[ -z "$running_home" ]] || ! command -v /usr/libexec/java_home >/dev/null 2>&1; then
         echo ""
         return
     fi
@@ -95,9 +110,12 @@ resolve_repo_dir() {
 
 run_three_times() {
     local project_dir="$1" out_prefix="$2"
+    local i
     for i in 1 2 3; do
-        "$GRADLEZILLA_BIN" generate "$project_dir" --dry-run --format json \
-            >"${out_prefix}.run${i}.json" 2>"${out_prefix}.run${i}.stderr"
+        if ! "$GRADLEZILLA_BIN" generate "$project_dir" --dry-run --format json \
+            >"${out_prefix}.run${i}.json" 2>"${out_prefix}.run${i}.stderr"; then
+            return 1
+        fi
     done
 }
 
