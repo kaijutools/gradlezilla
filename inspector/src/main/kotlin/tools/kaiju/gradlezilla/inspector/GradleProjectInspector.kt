@@ -14,7 +14,6 @@ class GradleProjectInspector(
         listOf(
             InitScriptExtractor(),
             VersionCatalogExtractor(),
-            StaticBuildFileExtractor(),
         ),
 ) {
     @Throws(GradleInspectorException::class)

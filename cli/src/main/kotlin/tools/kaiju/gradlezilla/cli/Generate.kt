@@ -43,7 +43,7 @@ class Generate :
     override fun run() {
         val isHuman = format == "human"
 
-        if (isHuman) echo("Inspecting Android project at: ${projectDir.absolutePath} ...")
+        if (isHuman) echo("Inspecting Android project at: ${projectDir.canonicalFile.absolutePath} ...")
 
         val spec =
             try {
@@ -54,16 +54,22 @@ class Generate :
 
         val dockerfile = DockerfileGenerator().generate(spec)
 
-        val outputPath: String? =
-            if (dryRun) {
-                null
-            } else {
-                val outputFile = File(projectDir, "Dockerfile")
-                outputFile.writeText(dockerfile)
-                outputFile.absolutePath
-            }
+        val outputPath = resolveOutputPath(projectDir, dockerfile, dryRun)
 
         val formatter = GenerateFormatter.forFormat(format)
         echo(formatter.format(spec, dockerfile, outputPath))
     }
+}
+
+// Canonicalizes projectDir so a relative argument like "." doesn't leave a "/./" segment in outputPath.
+internal fun resolveOutputPath(
+    projectDir: File,
+    dockerfile: String,
+    dryRun: Boolean,
+): String? {
+    if (dryRun) return null
+
+    val outputFile = File(projectDir.canonicalFile, "Dockerfile")
+    outputFile.writeText(dockerfile)
+    return outputFile.absolutePath
 }

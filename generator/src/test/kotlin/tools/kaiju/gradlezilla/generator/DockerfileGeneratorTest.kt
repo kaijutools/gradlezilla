@@ -39,10 +39,10 @@ class DockerfileGeneratorTest {
     }
 
     @Test
-    fun `env sets PATH with cmdline-tools and platform-tools`() {
+    fun `env sets PATH with cmdline-tools only`() {
         val output = render()
         assertTrue(output.contains("cmdline-tools/latest/bin"))
-        assertTrue(output.contains("platform-tools"))
+        assertFalse(output.contains("platform-tools"))
     }
 
     // ── L2: cmdline-tools ─────────────────────────────────────────────────

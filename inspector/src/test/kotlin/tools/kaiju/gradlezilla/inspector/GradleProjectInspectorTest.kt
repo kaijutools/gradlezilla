@@ -13,6 +13,7 @@ import tools.kaiju.gradlezilla.models.PinnedConnection
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private class ThrowingExtractor : AgpDataExtractor {
@@ -89,6 +90,20 @@ class GradleProjectInspectorTest {
 
         assertTrue(exception.message!!.contains("ThrowingExtractor threw an unexpected error: boom"))
         assertTrue(exception.message!!.contains("NotApplicableExtractor: n/a"))
+    }
+
+    @Test
+    fun executeExtractionChain_defaultExtractors_failureOnlyListsExtractorsThatRan() {
+        val inspector = GradleProjectInspector(projectDir = File("."))
+
+        val exception =
+            assertThrows {
+                inspector.executeExtractionChain(fakeContext(File(".")))
+            }
+
+        assertTrue(exception.message!!.contains("InitScriptExtractor"))
+        assertTrue(exception.message!!.contains("VersionCatalogExtractor"))
+        assertFalse(exception.message!!.contains("StaticBuildFileExtractor"))
     }
 
     private fun assertThrows(block: () -> Unit): GradleInspectorException {
