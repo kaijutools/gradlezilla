@@ -52,7 +52,6 @@ private fun fakeContext(projectDir: File) =
         connection = FakePinnedConnection,
         environment =
             GradleProjectEnvironment(
-                jdkVersion = 17,
                 gradleVersion = "8.0",
                 gradleJvmArgs = null,
                 modules = emptyList(),

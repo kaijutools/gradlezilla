@@ -41,13 +41,25 @@ class GradleProjectInspector(
         validateGradleProject()
         JdkPreflight.check(projectDir)?.let { throw GradleInspectorException(it) }
 
+        val daemonJvmCriteriaVersion = DaemonJvmCriteria.read(projectDir)
         val javaHome = File(System.getProperty("java.home"))
         return connected(javaHome) { connection ->
             val env = fetchEnvironment(connection)
             val ctx = ExtractionContext(projectDir, connection, env)
             val agpData = executeExtractionChain(ctx)
+
+            val jdkFacts = extractors.filterIsInstance<InitScriptExtractor>().firstOrNull()?.jdkFacts.orEmpty()
+            val gradleVersion = GradleVersion.parse(env.gradleVersion)
+            val agpVersion = agpData.agpVersion?.let(AgpVersion::parse)
+            val resolution = JdkResolver.resolve(daemonJvmCriteriaVersion, jdkFacts, gradleVersion, agpVersion)
+            val resolved =
+                when (resolution) {
+                    is JdkResolution.Resolved -> resolution
+                    is JdkResolution.Unsupported -> throw GradleInspectorException(resolution.reason)
+                }
+
             AndroidProjectSpec(
-                jdkVersion = env.jdkVersion,
+                jdkVersion = resolved.jdkVersion,
                 gradleVersion = env.gradleVersion,
                 androidSdkVersion = agpData.compileSdk,
                 androidBuildToolsVersion = agpData.buildToolsVersion,
@@ -56,6 +68,8 @@ class GradleProjectInspector(
                     ExtractionMetadata(
                         gradleUserHome = connection.gradleUserHome.absolutePath,
                         daemonJavaHome = javaHome.absolutePath,
+                        jdkVersionSource = resolved.source.wireName(),
+                        jdkVersionWarnings = resolved.warnings,
                     ),
             )
         }
@@ -90,7 +104,6 @@ class GradleProjectInspector(
             val gradleProject = connection.getModel(GradleProject::class.java)
 
             return GradleProjectEnvironment(
-                jdkVersion = jdkMajorVersion(buildEnv.java.javaHome),
                 gradleVersion = buildEnv.gradle.gradleVersion,
                 gradleJvmArgs =
                     buildEnv.java.jvmArguments
@@ -152,19 +165,6 @@ class GradleProjectInspector(
                 collectModules(child)
         }
 
-    private fun jdkMajorVersion(javaHome: File): Int {
-        val version =
-            File(javaHome, "release")
-                .takeIf { it.exists() }
-                ?.readLines()
-                ?.firstOrNull { it.startsWith("JAVA_VERSION=") }
-                ?.removePrefix("JAVA_VERSION=")
-                ?.trim('"')
-                ?: return DEFAULT_JDK_VERSION
-        val parts = version.split(".")
-        return if (parts[0] == "1") parts[1].toInt() else parts[0].toInt()
-    }
-
     private fun validateGradleProject() {
         val hasSettingsFile = SETTINGS_FILES.any { File(projectDir, it).exists() }
         if (!hasSettingsFile) {
@@ -175,7 +175,14 @@ class GradleProjectInspector(
     }
 
     private companion object {
-        const val DEFAULT_JDK_VERSION = 17
         val SETTINGS_FILES = listOf("settings.gradle.kts", "settings.gradle")
     }
 }
+
+private fun JdkVersionSource.wireName(): String =
+    when (this) {
+        JdkVersionSource.DAEMON_JVM_CRITERIA -> "daemonJvmCriteria"
+        JdkVersionSource.TOOLCHAIN -> "toolchain"
+        JdkVersionSource.BYTECODE_TARGET -> "bytecodeTarget"
+        JdkVersionSource.AGP_MINIMUM -> "agpMinimum"
+    }

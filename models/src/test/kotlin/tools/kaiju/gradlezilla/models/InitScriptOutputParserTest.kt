@@ -68,4 +68,12 @@ class InitScriptOutputParserTest {
 
         assertEquals("android-Baklava", result.rawValue)
     }
+
+    @Test
+    fun `parses agpVersion when present in the data line`() {
+        val output = "GRADLEZILLA_AGP_DATA::compileSdk=34::buildTools=34.0.0::ndk=null::agpVersion=8.5.0"
+        val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
+
+        assertEquals("8.5.0", result.data.agpVersion)
+    }
 }

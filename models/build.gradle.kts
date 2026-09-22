@@ -9,6 +9,7 @@ dependencies {
     implementation(libs.gradle.tooling)
     implementation(libs.kotlinx.serialization.core)
     testImplementation(kotlin("test"))
+    testImplementation(libs.kotlinx.serialization.json)
 }
 
 tasks.test { useJUnitPlatform() }

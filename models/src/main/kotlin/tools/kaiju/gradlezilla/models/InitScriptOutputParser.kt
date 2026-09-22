@@ -44,6 +44,7 @@ object InitScriptOutputParser {
                 compileSdk = compileSdk,
                 buildToolsVersion = properties["buildTools"],
                 ndkVersion = properties["ndk"],
+                agpVersion = properties["agpVersion"],
             ),
         )
     }

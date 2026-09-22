@@ -4,6 +4,8 @@ import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
 import tools.kaiju.gradlezilla.models.ExtractionOutcome
 import tools.kaiju.gradlezilla.models.InitScriptOutputParser
+import tools.kaiju.gradlezilla.models.JdkFactsParser
+import tools.kaiju.gradlezilla.models.ModuleJdkFacts
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -12,6 +14,10 @@ import java.util.*
 class InitScriptExtractor : AgpDataExtractor {
     override val name: String
         get() = InitScriptExtractor::class.java.simpleName
+
+    /** Populated as a side effect of [extract] — the per-module JDK facts from the same run. */
+    var jdkFacts: List<ModuleJdkFacts> = emptyList()
+        private set
 
     override fun extract(context: ExtractionContext): ExtractionOutcome {
         val initScriptFile = createInitScript()
@@ -32,6 +38,7 @@ class InitScriptExtractor : AgpDataExtractor {
 
             val output = outputStream.toString()
             dumpDebugOutput(output, errorStream.toString())
+            jdkFacts = JdkFactsParser.parse(output)
             when (val result = InitScriptOutputParser.parse(output)) {
                 is InitScriptOutputParser.ParseOutcome.Success -> {
                     ExtractionOutcome.Found(result.data)
@@ -80,7 +87,10 @@ class InitScriptExtractor : AgpDataExtractor {
             this::class.java.getResource("/extractor.gradle")?.readText()
                 ?: error("Fatal: extractor.gradle not found in resources")
 
-        val processedScript = rawScript.replace(PREFIX_TAG, InitScriptOutputParser.DATA_PREFIX)
+        val processedScript =
+            rawScript
+                .replace(PREFIX_TAG, InitScriptOutputParser.DATA_PREFIX)
+                .replace(JDK_PREFIX_TAG, JdkFactsParser.DATA_PREFIX)
 
         return File.createTempFile("gradlezilla-ext-${UUID.randomUUID()}", ".gradle").apply {
             writeText(processedScript)
@@ -89,5 +99,6 @@ class InitScriptExtractor : AgpDataExtractor {
 
     private companion object {
         private const val PREFIX_TAG = "{{PREFIX}}"
+        private const val JDK_PREFIX_TAG = "{{JDK_PREFIX}}"
     }
 }

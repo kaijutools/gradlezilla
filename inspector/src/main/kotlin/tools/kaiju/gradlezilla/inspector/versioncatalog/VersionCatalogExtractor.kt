@@ -35,12 +35,14 @@ class VersionCatalogExtractor : AgpDataExtractor {
 
             val buildToolsVersion = BUILD_TOOLS_KEYS.firstNotNullOfOrNull { versions[it] }
             val ndkVersion = NDK_KEYS.firstNotNullOfOrNull { versions[it] }
+            val agpVersion = AGP_VERSION_KEYS.firstNotNullOfOrNull { versions[it] }
 
             ExtractionOutcome.Found(
                 AgpData(
                     compileSdk = compileSdk,
                     buildToolsVersion = buildToolsVersion,
                     ndkVersion = ndkVersion,
+                    agpVersion = agpVersion,
                 ),
             )
         } catch (e: IOException) {
@@ -70,5 +72,6 @@ class VersionCatalogExtractor : AgpDataExtractor {
         val COMPILE_SDK_KEYS = listOf("compileSdk", "compile-sdk", "compileSdkVersion", "compile_sdk")
         val BUILD_TOOLS_KEYS = listOf("buildTools", "buildToolsVersion", "build-tools", "build_tools")
         val NDK_KEYS = listOf("ndk", "ndkVersion", "ndk-version", "ndk_version", "androidNdk")
+        val AGP_VERSION_KEYS = listOf("agp", "agp-version", "androidGradlePlugin")
     }
 }
