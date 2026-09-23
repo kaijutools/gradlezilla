@@ -32,13 +32,12 @@ main checkout), place it as a **sibling** of `main`, not nested inside it:
 ```
 ~/work/Kaiju/gradlezilla/
 ├── main/            # the primary checkout
-└── worktrees/
-    ├── <name>/       # e.g. worktrees/cleanup-dockerfile-extractor
-    └── <name>/
+├── <name>/          # e.g. fix-no-config-cache
+└── <name>/
 ```
 
 ```bash
-git worktree add -b <branch> ~/work/Kaiju/gradlezilla/worktrees/<name> [<start-point>]
+git worktree add -b <branch> ~/work/Kaiju/gradlezilla/<name> [<start-point>]
 ```
 
 Do **not** create worktrees under `main/.claude/worktrees/` (or anywhere else inside `main`'s
