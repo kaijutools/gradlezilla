@@ -76,7 +76,7 @@ Gradlezilla uses a hybrid **Static Analysis Chain of Responsibility**:
 Results from the latest [Repository Matrix Test](.github/workflows/matrix-test.yaml) run on `main`.
 
 <!-- MATRIX-TABLE:START -->
-Last verified at commit [`ccbbc6e`](https://github.com/kaijutools/gradlezilla/commit/ccbbc6ef5ae76641e247f7ce67a348af61d2844e).
+Last verified at commit [`fdecfe2`](https://github.com/kaijutools/gradlezilla/commit/fdecfe2cfc9b398075250aa608e7186c962739a4).
 
 | Repository | Status |
 |---|---|
