@@ -35,6 +35,14 @@ private class NotApplicableExtractor : AgpDataExtractor {
     override fun extract(context: ExtractionContext): ExtractionOutcome = ExtractionOutcome.NotApplicable("n/a")
 }
 
+/** Mimics InitScriptExtractor's own catch blocks: a generic reason plus a separate cause. */
+private class FailingWithCauseExtractor : AgpDataExtractor {
+    override val name = "FailingWithCauseExtractor"
+
+    override fun extract(context: ExtractionContext): ExtractionOutcome =
+        ExtractionOutcome.Failed("Failed to extract with init script", RuntimeException("boom"))
+}
+
 private object FakePinnedConnection : PinnedConnection {
     override val gradleUserHome: File = File(".")
     override val projectCacheDir: File = File(".")
@@ -91,6 +99,23 @@ class GradleProjectInspectorTest {
 
         assertTrue(exception.message!!.contains("ThrowingExtractor threw an unexpected error: boom"))
         assertTrue(exception.message!!.contains("NotApplicableExtractor: n/a"))
+    }
+
+    @Test
+    fun executeExtractionChain_failedOutcomeWithCause_doesNotDuplicateCauseMessage() {
+        val inspector =
+            GradleProjectInspector(
+                projectDir = File("."),
+                extractors = listOf(FailingWithCauseExtractor()),
+            )
+
+        val exception =
+            assertThrows {
+                inspector.executeExtractionChain(fakeContext(File(".")))
+            }
+
+        assertTrue(exception.message!!.contains("Failed to extract with init script: boom"))
+        assertFalse(exception.message!!.contains("boom: boom"))
     }
 
     @Test

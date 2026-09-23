@@ -3,7 +3,14 @@
 // configuration-cache entry — without disabling configuration cache itself, which Isolated
 // Projects (org.gradle.isolated-projects) forbids outright. The property name must match
 // CACHE_BUST_PROPERTY in InitScriptExtractor.kt, which passes a fresh value on every run.
-providers.systemProperty('gradlezillaCacheBust').orNull
+//
+// ProviderFactory.systemProperty was only added in Gradle 6.1 (configuration cache itself didn't
+// exist before 6.6), so this must stay guarded — this repo supports target Gradle back to 5.0
+// (see GradleJdkCompatibility), and calling it unconditionally hard-fails init-script evaluation
+// with a missing-method error on every older project, cache-busting or not.
+if (org.gradle.util.GradleVersion.current() >= org.gradle.util.GradleVersion.version('6.1')) {
+    providers.systemProperty('gradlezillaCacheBust').orNull
+}
 
 def emit = { project ->
     def isAndroid = project.plugins.hasPlugin('com.android.application') ||

@@ -7,7 +7,6 @@ import tools.kaiju.gradlezilla.models.ExtractionOutcome
 import tools.kaiju.gradlezilla.models.InitScriptOutputParser
 import tools.kaiju.gradlezilla.models.JdkFactsParser
 import tools.kaiju.gradlezilla.models.ModuleJdkFacts
-import tools.kaiju.gradlezilla.models.rootCause
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
@@ -65,10 +64,12 @@ class InitScriptExtractor : AgpDataExtractor {
             }
         } catch (e: IOException) {
             dumpDebugOutput(outputStream.toString(), errorStream.toString())
-            ExtractionOutcome.Failed("Failed to extract with init script: ${e.rootCause().message}", e)
+            // Reason stays generic — GradleProjectInspector.executeExtractionChain appends the
+            // root cause message once, centrally; embedding it here too would duplicate it.
+            ExtractionOutcome.Failed("Failed to extract with init script", e)
         } catch (e: GradleConnectionException) {
             dumpDebugOutput(outputStream.toString(), errorStream.toString())
-            ExtractionOutcome.Failed("Failed to extract with init script: ${e.rootCause().message}", e)
+            ExtractionOutcome.Failed("Failed to extract with init script", e)
         } finally {
             initScriptFile.delete()
         }

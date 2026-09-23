@@ -171,7 +171,7 @@ class GradleProjectInspector(
     ) {
         if (System.getenv("GRADLEZILLA_DEBUG") == null) return
         System.err.println("[$extractorName] failed with cause chain:")
-        generateSequence(e as Throwable) { it.cause }.forEach {
+        e.causeChain().forEach {
             System.err.println("  ${it::class.qualifiedName}: ${it.message}")
         }
     }
