@@ -39,10 +39,29 @@ Gradlezilla will analyze your `build.gradle` / `build.gradle.kts` files, infer t
   gradlezilla generate . -d
   ```
 
-* **JDK Override:** Gradlezilla attempts to infer your required Java version. For legacy projects that lack a `.java-version` file, you can explicitly force a JDK target to prevent host-environment bleed-through:
+* **Layered Builds:** Generate a multi-layer Dockerfile that resolves Gradle dependencies in a cacheable layer separate from your application source, so source-only edits don't invalidate the dependency layer:
   ```bash
-  gradlezilla generate . --jdk 17
+  gradlezilla generate . --layered
   ```
+
+* **Machine-Readable Output:** For CI pipelines and other tooling, emit `json` or `sarif` instead of the human-readable summary:
+  ```bash
+  gradlezilla generate . --dry-run --format json
+  ```
+
+Gradlezilla always derives the required JDK version from what your project itself declares — a
+Gradle daemon JVM criteria pin, toolchain declarations, bytecode targets, or your AGP version's
+minimum — never from whichever JVM happens to launch it. There's no manual `--jdk` override: if
+your project's Gradle wrapper doesn't support the JDK you're currently running, Gradlezilla fails
+fast with the `JAVA_HOME` to set instead of silently building under the wrong one.
+
+### Inspecting a Project
+
+To list a project's Gradle build tasks (grouped by task group) without generating a Dockerfile:
+
+```bash
+gradlezilla inspect .
+```
 
 ## 🏗️ How to Use Your Generated Dockerfile
 
@@ -81,12 +100,15 @@ jobs:
 
 ## 🧠 How it Works (Under the Hood)
 
-Parsing Gradle files with Regex is a fool's errand due to the complexity of the Kotlin DSL and version catalogs. Executing Gradle scripts to extract data is too slow and prone to daemon crashes.
+Parsing Gradle files with Regex (or hand-rolled AST parsing) is a fool's errand due to the complexity of the Kotlin DSL and version catalogs. So instead of re-implementing Gradle's own evaluation logic, Gradlezilla asks Gradle itself — via the [Tooling API](https://docs.gradle.org/current/userguide/tooling_api.html), the same mechanism Android Studio uses to sync a project.
 
-Gradlezilla uses a hybrid **Static Analysis Chain of Responsibility**:
-1. **Fast Path (TOML/Properties):** It first looks for declarative version definitions in `libs.versions.toml`, `gradle.properties`, and `.java-version` files.
-2. **AST Parsing:** It safely parses `build.gradle.kts` ASTs to find exact `compileSdk`, `buildToolsVersion`, and `ndkVersion` declarations.
-3. **Environment Generation:** It synthesizes these requirements into a dynamic `sdkmanager` bash command that installs only what your project strictly requires—nothing more, nothing less.
+Gradlezilla uses a **Chain of Responsibility** of extractors:
+1. **Init-Script Extraction (primary path):** An init script hooks the target project's own Gradle evaluation and emits its exact AGP version, `compileSdk`, `buildToolsVersion`, `ndkVersion`, and toolchain/bytecode-target facts straight from the evaluated model — not a text-based guess.
+2. **Version Catalog Fallback:** If that doesn't yield a usable AGP version, it falls back to parsing `gradle/libs.versions.toml` directly.
+3. **JDK Resolution:** The required JDK is derived from what the project declares — a Gradle daemon JVM criteria pin, toolchain declarations, bytecode targets, or the AGP minimum — never from whichever JVM happens to be running Gradlezilla itself.
+4. **Environment Generation:** These requirements are synthesized into a dynamic `sdkmanager` bash command that installs only what your project strictly requires — nothing more, nothing less.
+
+Running a real Gradle build sounds like it should be slow and flaky — daemon crashes, cache collisions, output that depends on whatever else is running on your machine. Gradlezilla avoids that by giving every invocation its own isolated Gradle user home and project cache directory, pinning the JDK explicitly instead of trusting the ambient one, and busting Gradle's configuration cache with a fresh token on every run so a stale cache entry can never silently skip extraction (see "Known Limitations" below).
 
 ## 📊 Matrix Test Status
 
