@@ -1,0 +1,16 @@
+{
+  "repo": "Timber",
+  "url": "https://github.com/JakeWharton/timber.git",
+  "sha": "55b54775e7ecc003efb75116de7721048483a56f",
+  "commitDate": "2026-09-18",
+  "pinRationale": "Pinned to HEAD at the time this matrix was hardened. Gradle 9.7.1 runs natively on a JDK-21 runner (no discovery fallback needed). Smallest/simplest repo in the matrix: no explicit JDK config anywhere, so jdkVersion falls all the way through to the AGP-minimum-JDK floor.",
+  "groundTruthMethod": "gradleVersion/androidSdkVersion/moduleCount were confirmed by reading build files at the pinned commit (no multi-segment includes here, so no implicit-parent surprises). jdkVersion and androidBuildToolsVersion/androidNdkVersion are AGP's own deterministic resolution, not literal build-file values — confirmed by running `gradlezilla generate --dry-run --format json` against this exact pinned checkout twice: once with no Android SDK present at all, once with a full local SDK. Both runs produced byte-identical values for these fields, proving they are a function of the pinned AGP/Gradle version, not of whatever happens to be installed on the runner.",
+  "groundTruth": {
+    "gradleVersion": { "value": "9.7.1", "source": "gradle/wrapper/gradle-wrapper.properties: distributionUrl=...gradle-9.7.1-bin.zip" },
+    "jdkVersion": { "value": 17, "source": "verified run: extractionMetadata.jdkVersionSource=\"agpMinimum\" — no explicit sourceCompatibility/targetCompatibility/jvmTarget/toolchain anywhere in timber/build.gradle, timber-lint/build.gradle, timber-sample/build.gradle, or root build.gradle; AGP 9.4.0 (gradle/libs.versions.toml agp=\"9.4.0\") requires JDK 17+, which resolves" },
+    "androidSdkVersion": { "value": 36, "source": "gradle/libs.versions.toml: compileSdk = \"36\", read via libs.versions.compileSdk.get() in timber/build.gradle" },
+    "androidBuildToolsVersion": { "value": "36.0.0", "source": "verified run: not set anywhere in build.gradle files; this is AGP 9.4.0's own default build-tools version" },
+    "moduleCount": { "value": 3, "source": "settings.gradle: include ':timber', include ':timber-lint', include ':timber-sample' — no multi-segment includes, confirmed by verified run" },
+    "ndkPresent": { "value": true, "source": "verified run: androidNdkVersion=\"28.2.13676358\" — AGP 9.x auto-resolves a default NDK version even though this project has zero native code (no externalNativeBuild/CMakeLists.txt anywhere); this is AGP-version-dependent behavior (see now-in-android.json), not something driven by this project's own config" }
+  }
+}

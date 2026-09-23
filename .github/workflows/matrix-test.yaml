@@ -15,73 +15,182 @@ jobs:
       fail-fast: false
       matrix:
         repo:
+          # Deliberately pinned to commit SHAs, not branches — see e2e/expected/<slug>.json for
+          # the ground truth (and how it was derived) at each pin. Sunflower and Signal are
+          # pinned to old Gradle versions (8.1 / 8.0) on purpose: neither can run its daemon on
+          # the JDK 21 this job sets up below, so they only pass via JdkDiscovery's fallback to
+          # an alternate JDK on the runner image — Now In Android/Timber/Wikipedia are on Gradle
+          # 9.7.1 and cover the ordinary "runner JDK works directly" path.
           - {
               name: "Sunflower",
+              slug: "sunflower",
               url: "https://github.com/android/sunflower.git",
+              sha: "25472a6cffbacc8ca3bc64142cf09ad58f0c948e",
             }
           - {
               name: "Now In Android",
+              slug: "now-in-android",
               url: "https://github.com/android/nowinandroid.git",
+              sha: "a49ed253d75e61a2b6ab80a8da677b57437b08eb",
             }
-          - { name: "Timber", url: "https://github.com/JakeWharton/timber.git" }
+          - {
+              name: "Timber",
+              slug: "timber",
+              url: "https://github.com/JakeWharton/timber.git",
+              sha: "55b54775e7ecc003efb75116de7721048483a56f",
+            }
           - {
               name: "Signal",
+              slug: "signal",
               url: "https://github.com/signalapp/Signal-Android.git",
+              sha: "53673be5cbd69c5664d5ab14c1f5b9aa14cecc32",
             }
           - {
               name: "Wikipedia",
+              slug: "wikipedia",
               url: "https://github.com/wikimedia/apps-android-wikipedia.git",
+              sha: "de13f265ebed061d0ccc0030c2ea3d345a35b31a",
             }
 
     steps:
       - name: Checkout Gradlezilla
         uses: actions/checkout@v6
 
-      - uses: actions/setup-java@v5
+      # 17 first, 21 last: setup-java's default JAVA_HOME/PATH track the LAST version listed, so
+      # the runner's ambient JDK is 21 (the real-world condition this matrix is meant to prove
+      # JdkDiscovery survives). 17 stays reachable via JAVA_HOME_17_X64 for the unrelated ambient
+      # daemon below — simulating a stray daemon Android Studio or another project already left
+      # running under a different JDK, same as e2e/determinism.sh's start_ambient_daemon.
+      - name: Set up JDKs (21 primary for the runner, 17 for the ambient daemon)
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: |
+            17
+            21
           cache: gradle
-
-      - name: Clone Target Repository
-        run: git clone --depth 1 ${{ matrix.repo.url }} target-repo
 
       - name: Build Gradlezilla
         run: ./gradlew :cli:installDist
 
-      - name: Run Gradlezilla
-        id: run-cli
+      - name: Clone target repository at pinned commit
         run: |
-          # Invoke the installed distribution directly rather than `./gradlew :cli:run` —
-          # this project's own build.gradle.kts pins all subprojects to a JDK 17
-          # toolchain, so a Gradle-managed run task ignores JAVA_HOME entirely and
-          # always executes under JDK 17 regardless of what setup-java installs here.
-          # The installed script has no such toolchain and honors JAVA_HOME, which is
-          # what lets a target repo's own JDK requirements actually take effect.
-          if cli/build/install/gradlezilla/bin/gradlezilla generate "$PWD/target-repo"; then
-            echo "status=✅ Success" >> $GITHUB_OUTPUT
-          else
-            echo "status=❌ Failed" >> $GITHUB_OUTPUT
+          mkdir target-repo
+          cd target-repo
+          git init -q
+          git remote add origin "${{ matrix.repo.url }}"
+          git fetch --depth 1 -q origin "${{ matrix.repo.sha }}"
+          git checkout -q FETCH_HEAD
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "${{ matrix.repo.sha }}" ]]; then
+            echo "::error::checked out $actual_sha but expected ${{ matrix.repo.sha }}"
+            exit 1
           fi
 
-      - name: Upload Generated Dockerfile
-        if: steps.run-cli.outputs.status == '✅ Success'
+      # Real-world condition #1: gradlezilla must never see a pristine repo. `./gradlew help`
+      # here both creates a configuration-cache entry (where the target's Gradle version
+      # supports it) and leaves the repo's own daemon running in the background — ambient state
+      # a real developer's checkout would already have before ever touching gradlezilla.
+      - name: Prime target repo (own daemon + configuration-cache entry)
+        working-directory: target-repo
+        run: ./gradlew help --console=plain
+
+      - name: Snapshot target repo's configuration-cache before extraction
+        working-directory: target-repo
+        run: |
+          if [[ -d .gradle/configuration-cache ]]; then
+            find .gradle/configuration-cache -type f -exec sha256sum {} \; | sort >../cc-before.sha256
+          else
+            : >../cc-before.sha256
+          fi
+
+      # Real-world condition #2: an unrelated Gradle daemon, under a different JDK, in a
+      # completely separate project — simulating Android Studio (or any other project) already
+      # having a daemon parked on the machine. gradlezilla's own daemon must stay isolated from
+      # this (PR #25) regardless.
+      - name: Start unrelated ambient daemon (different JDK, separate project)
+        run: |
+          mkdir -p /tmp/ambient-project
+          cp -r gradle /tmp/ambient-project/gradle
+          cp gradlew /tmp/ambient-project/gradlew
+          chmod +x /tmp/ambient-project/gradlew
+          echo 'rootProject.name = "ambient"' >/tmp/ambient-project/settings.gradle.kts
+          cd /tmp/ambient-project
+          JAVA_HOME="$JAVA_HOME_17_X64" GRADLE_USER_HOME=/tmp/ambient-gradle-home \
+            ./gradlew help --console=plain
+
+      - name: Run Gradlezilla extraction twice (determinism check)
+        id: extract
+        env:
+          # Isolated from both the ambient daemon above and the runner's default ~/.gradle —
+          # never the target repo's own .gradle (see models/.../GradlezillaHome.kt).
+          GRADLEZILLA_GRADLE_HOME: /tmp/gradlezilla-home
+        run: |
+          set +e
+          ok=true
+          for i in 1 2; do
+            SECONDS=0
+            cli/build/install/gradlezilla/bin/gradlezilla generate "$PWD/target-repo" \
+              --dry-run --format json >"run$i.json" 2>"run$i.stderr"
+            run_status=$?
+            elapsed_s=$SECONDS
+            if [[ $i -eq 1 ]]; then echo "extraction_time_s=$elapsed_s" >>"$GITHUB_OUTPUT"; fi
+            if [[ $run_status -ne 0 ]]; then
+              echo "::error::gradlezilla exited $run_status on run $i"
+              cat "run$i.stderr"
+              ok=false
+            fi
+          done
+          echo "extraction_ok=$ok" >>"$GITHUB_OUTPUT"
+
+      - name: Verify extraction against ground truth
+        id: verify
+        if: always()
+        run: |
+          set +e
+          chmod +x e2e/verify-extraction.sh
+          if ./e2e/verify-extraction.sh \
+            "${{ matrix.repo.name }}" \
+            run1.json run2.json \
+            "e2e/expected/${{ matrix.repo.slug }}.json" \
+            e2e/schema/generate-json.schema.json \
+            target-repo \
+            cc-before.sha256 \
+            "${{ steps.extract.outputs.extraction_time_s }}" \
+            "result-${{ strategy.job-index }}.md"; then
+            echo "status=✅ Passed" >>"$GITHUB_OUTPUT"
+          else
+            echo "status=❌ Failed" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload extracted spec (JSON)
+        if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: dockerfile-${{ strategy.job-index }}
-          path: target-repo/Dockerfile
+          name: spec-${{ strategy.job-index }}
+          path: run1.json
           retention-days: 1
 
       - name: Save Result to Markdown
+        if: always()
         run: |
-          echo "| ${{ matrix.repo.name }} | ${{ steps.run-cli.outputs.status }} |" > result-${{ strategy.job-index }}.md
+          {
+            echo "| ${{ matrix.repo.name }} | ${{ steps.verify.outputs.status }} |"
+          } >summary-${{ strategy.job-index }}.md
 
-      - name: Upload Result Artifact
+      - name: Upload Result Artifacts
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: test-result-${{ strategy.job-index }}
-          path: result-${{ strategy.job-index }}.md
+          path: |
+            summary-${{ strategy.job-index }}.md
+            result-${{ strategy.job-index }}.md
           retention-days: 1
+
+      - name: Fail job if any check failed
+        if: steps.verify.outputs.status != '✅ Passed'
+        run: exit 1
 
   generate-report:
     name: Generate Markdown Report
@@ -111,10 +220,18 @@ jobs:
             echo
             echo "| Repository | Status |"
             echo "|---|---|"
-            cat results/*.md
+            cat results/summary-*.md
           } | tee matrix-table.md
-          echo "### Gradlezilla Matrix Report" >> $GITHUB_STEP_SUMMARY
-          cat matrix-table.md >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### Gradlezilla Matrix Report"
+            cat matrix-table.md
+            echo
+            echo "### Per-repo detail"
+            echo
+            for f in results/result-*.md; do
+              [[ -f "$f" ]] && cat "$f" && echo
+            done
+          } >>"$GITHUB_STEP_SUMMARY"
 
       - name: Update README
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')

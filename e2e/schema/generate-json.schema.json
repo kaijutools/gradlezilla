@@ -1,0 +1,36 @@
+{
+  "_comment": "Hand-written snapshot of `gradlezilla generate --format json`'s field names and types, sourced from the Kotlin models on 2026-09-22 (models/src/main/kotlin/tools/kaiju/gradlezilla/models/{AndroidProjectSpec,ModuleSpec,ExtractionMetadata}.kt and cli/.../format/GenerateFormatter.kt's GenerateOutput envelope). kotlinx.serialization omits a field from the JSON entirely whenever its runtime value equals its Kotlin default (confirmed empirically: androidNdkVersion/androidCmakeVersion/gradleJvmArgs/hasBuildSrc/hasBuildLogic are routinely absent, and even androidBuildToolsVersion or extractionMetadata.jdkVersionWarnings can be), so 'required' below lists only fields with NO Kotlin default (always serialized) or with @EncodeDefault(ALWAYS) (jdkVersion) — everything else is 'optional' and legitimately absent depending on the project. e2e/verify-extraction.sh fails if a live run has a key outside required+optional (an unknown/renamed field) or is missing a required key (e.g. jdkVersion silently disappearing, the historical bug this guard exists for). Regenerate deliberately (by hand, from the source) whenever a field is added/removed/renamed/changes default-ness, and note the change in the same PR — that pairing is the whole point of this guard: it turns an accidental drop into a merge conflict instead of a silent regression.",
+  "envelope": {
+    "required": { "spec": "AndroidProjectSpec", "dockerfile": "string", "outputPath": "string|null" },
+    "optional": {}
+  },
+  "AndroidProjectSpec": {
+    "required": { "jdkVersion": "number", "androidSdkVersion": "number" },
+    "optional": {
+      "androidBuildToolsVersion": "string",
+      "androidCommandLineToolsVersion": "string",
+      "androidNdkVersion": "string",
+      "androidCmakeVersion": "string",
+      "gradleVersion": "string",
+      "gradleJvmArgs": "string",
+      "modules": "array<ModuleSpec>",
+      "hasBuildSrc": "boolean",
+      "hasBuildLogic": "boolean",
+      "extractionMetadata": "ExtractionMetadata"
+    }
+  },
+  "ModuleSpec": {
+    "required": { "path": "string" },
+    "optional": { "isApplication": "boolean" }
+  },
+  "ExtractionMetadata": {
+    "required": {
+      "gradleUserHome": "string",
+      "projectCacheDir": "string",
+      "daemonJavaHome": "string",
+      "daemonJdkSource": "string",
+      "jdkVersionSource": "string"
+    },
+    "optional": { "jdkVersionWarnings": "array<string>" }
+  }
+}
