@@ -101,6 +101,15 @@ runs against it reuse the cached distribution.
 CI users should cache the `GRADLEZILLA_GRADLE_HOME` directory between runs to avoid paying
 the warm-up cost on every job.
 
+The init script used for extraction (`extractor.gradle`) targets Gradle 5.0 as its minimum
+supported version, matching the floor `GradleJdkCompatibility` already assumes elsewhere in the
+codebase. This is verified empirically (not just by API-availability inspection) against a real
+Gradle 5.0 distribution as part of the test suite — see `InitScriptGradleVersionCompatTest`. Any
+API used in the script that's newer than Gradle 5.0 must stay behind an explicit
+`GradleVersion.current() >= ...` guard with a fallback (or a no-op) for older versions; an
+unguarded newer API silently breaks extraction for every project on an older Gradle instead of
+failing a test.
+
 ## 🤝 Contributing
 
 Pull requests are welcome! If Gradlezilla fails to parse a specific repository structure, please open an issue with a link to the public repo or a snippet of the `build.gradle` file.
