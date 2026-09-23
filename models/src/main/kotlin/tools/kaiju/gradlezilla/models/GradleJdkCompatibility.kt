@@ -24,14 +24,18 @@ object GradleJdkCompatibility {
             GradleVersion(9, 4) to 26,
         ).sortedBy { it.first }
 
+    /** Returns null when unknown or newer than the table (fail open: assumed fine). */
+    fun maxSupportedJdk(gradle: GradleVersion): Int? {
+        if (gradle >= maxJdk.last().first) return null
+        return maxJdk.lastOrNull { gradle >= it.first }?.second
+    }
+
     /** Returns null when compatible, unknown, or newer than the table. */
     fun check(
         gradle: GradleVersion,
         runningJdk: Int,
     ): Incompatibility? {
-        // Fail open: a Gradle newer than anything we know about is assumed fine.
-        if (gradle >= maxJdk.last().first) return null
-        val max = maxJdk.lastOrNull { gradle >= it.first }?.second ?: return null
+        val max = maxSupportedJdk(gradle) ?: return null
         return if (runningJdk > max) Incompatibility(gradle, runningJdk, max) else null
     }
 

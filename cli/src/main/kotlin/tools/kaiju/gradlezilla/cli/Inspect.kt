@@ -27,11 +27,16 @@ class Inspect :
         help = "Output format (human, json, sarif)",
     ).choice("human", "json", "sarif").default("human")
 
+    private val daemonJdk: File? by option(
+        "--daemon-jdk",
+        help = "JDK home to run the extraction daemon with, bypassing auto-discovery.",
+    ).file(mustExist = true, canBeFile = false, canBeDir = true)
+
     @Suppress("SwallowedException")
     override fun run() {
         val targets =
             try {
-                GradleProjectInspector(projectDir).targets()
+                GradleProjectInspector(projectDir).targets(daemonJdk)
             } catch (e: GradleInspectorException) {
                 echo(e.message ?: "Could not connect to Gradle project at '$projectDir'")
                 throw UsageError(e.message ?: "Could not connect to Gradle project at '$projectDir'")

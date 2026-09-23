@@ -94,6 +94,7 @@ class AndroidProjectSpecTest {
                         gradleUserHome = "/home/.gradle",
                         projectCacheDir = "/home/.gradlezilla/gradle-home/project-caches/abc123",
                         daemonJavaHome = "/opt/jdk-21",
+                        daemonJdkSource = "systemPath",
                         jdkVersionSource = "agpMinimum",
                         jdkVersionWarnings = listOf("some warning"),
                     ),
