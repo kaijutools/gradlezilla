@@ -142,8 +142,9 @@ run_three_times() {
 
 # Regression check for the bug where jdkVersion was derived from whichever JVM launched the
 # CLI rather than from the project's own config: re-runs gradlezilla under a JDK different
-# from run1's, and asserts the spec (aside from the daemonJavaHome diagnostic, which is
-# expected to differ) and generated Dockerfile are byte-identical either way.
+# from run1's, and asserts the spec (aside from the daemonJavaHome/daemonJdkSource diagnostics,
+# which are expected to differ — this deliberately sets JAVA_HOME, which daemon JDK discovery
+# now honors as an explicit override) and generated Dockerfile are byte-identical either way.
 check_cross_jdk() {
     local project_dir="$1" out_prefix="$2"
 
@@ -158,7 +159,7 @@ check_cross_jdk() {
         return 1
     fi
 
-    local normalize='del(.spec.extractionMetadata.daemonJavaHome)'
+    local normalize='del(.spec.extractionMetadata.daemonJavaHome, .spec.extractionMetadata.daemonJdkSource)'
     if ! jq "$normalize" "${out_prefix}.run1.json" >"${out_prefix}.run1.normalized.json" ||
         ! jq "$normalize" "${out_prefix}.altjdk.json" >"${out_prefix}.altjdk.normalized.json"; then
         log "FAIL: could not normalize JSON for the cross-launcher-JDK comparison"

@@ -17,11 +17,11 @@ class GradleProjectInspector(
         ),
 ) {
     @Throws(GradleInspectorException::class)
-    fun targets(): List<BuildTarget> {
+    fun targets(daemonJdkOverride: File? = null): List<BuildTarget> {
         validateGradleProject()
-        JdkPreflight.check(projectDir)?.let { throw GradleInspectorException(it) }
+        val daemonJdk = DaemonJdk.resolve(projectDir, daemonJdkOverride)
 
-        return connected { connection ->
+        return connected(daemonJdk.javaHome) { connection ->
             val project = connection.getModel(GradleProject::class.java)
             project.tasks
                 .map { task ->
@@ -36,13 +36,12 @@ class GradleProjectInspector(
     }
 
     @Throws(GradleInspectorException::class)
-    fun inspect(): AndroidProjectSpec {
+    fun inspect(daemonJdkOverride: File? = null): AndroidProjectSpec {
         validateGradleProject()
-        JdkPreflight.check(projectDir)?.let { throw GradleInspectorException(it) }
+        val daemonJdk = DaemonJdk.resolve(projectDir, daemonJdkOverride)
 
         val daemonJvmCriteriaVersion = DaemonJvmCriteria.read(projectDir)
-        val javaHome = File(System.getProperty("java.home"))
-        return connected(javaHome) { connection ->
+        return connected(daemonJdk.javaHome) { connection ->
             val env = fetchEnvironment(connection)
             val ctx = ExtractionContext(projectDir, connection, env)
             val agpData = executeExtractionChain(ctx)
@@ -70,7 +69,8 @@ class GradleProjectInspector(
                     ExtractionMetadata(
                         gradleUserHome = connection.gradleUserHome.absolutePath,
                         projectCacheDir = connection.projectCacheDir.absolutePath,
-                        daemonJavaHome = javaHome.absolutePath,
+                        daemonJavaHome = daemonJdk.javaHome.absolutePath,
+                        daemonJdkSource = daemonJdk.source.wireName(),
                         jdkVersionSource = resolved.source.wireName(),
                         jdkVersionWarnings = resolved.warnings,
                     ),
@@ -81,7 +81,7 @@ class GradleProjectInspector(
     /** Runs [block] against a single pinned Gradle Tooling API connection for this project. */
     @Throws(GradleInspectorException::class)
     private fun <T> connected(
-        javaHome: File = File(System.getProperty("java.home")),
+        javaHome: File,
         block: (PinnedConnection) -> T,
     ): T =
         try {
