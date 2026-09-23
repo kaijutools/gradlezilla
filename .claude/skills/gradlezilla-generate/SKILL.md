@@ -7,7 +7,14 @@ description: Generate a production-ready Dockerfile for an Android/Gradle projec
 
 Generates a Dockerfile for an Android project by introspecting its Gradle
 toolchain (JDK, Android SDK, build tools, command-line tools, NDK) and
-synthesizing a matching immutable build environment.
+synthesizing a matching build-environment image. The image contains only the
+JDK and Android SDK — no project source. Mount the repository in and run
+Gradle against it:
+
+```bash
+docker build -t my-android-env .
+docker run --rm -v "$PWD:/workspace" my-android-env ./gradlew assembleDebug
+```
 
 ## Prerequisites
 
@@ -43,8 +50,6 @@ use the installed launcher instead — it honors `JAVA_HOME` normally.
 
 - `<projectDir>` — path to the Android project root (must exist and be a directory).
 - `--dry-run`, `-d` — print the Dockerfile to stdout instead of writing it to disk.
-- `--layered` — generate a multi-layer Dockerfile that resolves Gradle dependencies in a
-  layer separate from application source, so Docker's build cache survives source-only edits.
 
 ## Notes
 

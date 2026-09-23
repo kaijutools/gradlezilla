@@ -1,4 +1,12 @@
-# --- Gradlezilla Android Builder ---
+# --- Gradlezilla Android build environment ---
+#
+# This image is the build ENVIRONMENT only: the JDK and Android SDK packages
+# this project needs. It does not contain the project's source code — mount
+# the repository into /workspace and run Gradle there.
+#
+#   docker build -t my-android-env .
+#   docker run --rm -v "$PWD:/workspace" my-android-env ./gradlew assembleDebug
+#
 FROM eclipse-temurin:{{JDK_VERSION}}-jdk-jammy
 
 # Install required OS packages
@@ -21,14 +29,6 @@ RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
 RUN yes | sdkmanager --licenses > /dev/null && \
     sdkmanager {{SDK_PACKAGES}}
 
-# --- Build Execution ---
+# Mount point for the project. Source is not copied into the image — run
+# Gradle here against a bind-mounted repository.
 WORKDIR /workspace
-
-# Copy entire repository
-COPY . .
-
-# Make Gradle wrapper executable
-RUN chmod +x ./gradlew
-
-# Default build command (assemble release APKs)
-CMD ["bash", "-c", "./gradlew assembleRelease --no-daemon"]

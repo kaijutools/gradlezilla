@@ -93,15 +93,22 @@ class DockerfileGeneratorTest {
         assertFalse(render().contains("ndk;"))
     }
 
-    // ── L4: MVP Flat Execution ────────────────────────────────────────────
+    // ── L4: Build environment, not a build execution ────────────────────────
 
     @Test
-    fun `build execution uses flat copy`() {
-        assertTrue(render().contains("COPY . ."))
+    fun `sets workspace mount point`() {
+        assertTrue(render().contains("WORKDIR /workspace"))
     }
 
     @Test
-    fun `build execution uses default assembleRelease command`() {
-        assertTrue(render().contains("CMD [\"bash\", \"-c\", \"./gradlew assembleRelease --no-daemon\"]"))
+    fun `does not copy or add project content`() {
+        val output = render()
+        assertFalse(output.contains("COPY"))
+        assertFalse(output.contains("ADD "))
+    }
+
+    @Test
+    fun `does not run project build commands`() {
+        assertFalse(render().contains("CMD [\""))
     }
 }
