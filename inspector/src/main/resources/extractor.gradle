@@ -4,12 +4,23 @@
 // Projects (org.gradle.isolated-projects) forbids outright. The property name must match
 // CACHE_BUST_PROPERTY in InitScriptExtractor.kt, which passes a fresh value on every run.
 //
+// Read via project.providers, not the bare top-level `providers` accessor: that resolves to
+// Gradle.getProviders(), which is a newer addition to the Gradle interface than our floor
+// (confirmed via the Gradle API jar: absent on DefaultGradle in 8.0.2/8.1, present by 9.4.1) and
+// fails init-script evaluation with "Could not get unknown property 'providers'" on every older
+// project. Project.getProviders() has been present since long before our floor, so reading it
+// per-project during the same afterProject/afterEvaluate hook that already runs there is both
+// older-Gradle-safe and just as effective: each project's configuration observes the fresh
+// value, which is what the cache fingerprint tracks.
+//
 // ProviderFactory.systemProperty was only added in Gradle 6.1 (configuration cache itself didn't
 // exist before 6.6), so this must stay guarded — this repo supports target Gradle back to 5.0
 // (see GradleJdkCompatibility), and calling it unconditionally hard-fails init-script evaluation
 // with a missing-method error on every older project, cache-busting or not.
-if (org.gradle.util.GradleVersion.current() >= org.gradle.util.GradleVersion.version('6.1')) {
-    providers.systemProperty('gradlezillaCacheBust').orNull
+def bustConfigurationCache = { project ->
+    if (org.gradle.util.GradleVersion.current() >= org.gradle.util.GradleVersion.version('6.1')) {
+        project.providers.systemProperty('gradlezillaCacheBust').orNull
+    }
 }
 
 def emit = { project ->
@@ -94,12 +105,14 @@ def emitJdk = { project ->
 // isolation-safe per-project replacement; older Gradle falls back to allprojects.
 if (org.gradle.util.GradleVersion.current() >= org.gradle.util.GradleVersion.version('8.7')) {
     gradle.lifecycle.afterProject { project ->
+        bustConfigurationCache(project)
         emit(project)
         emitJdk(project)
     }
 } else {
     allprojects {
         afterEvaluate { project ->
+            bustConfigurationCache(project)
             emit(project)
             emitJdk(project)
         }

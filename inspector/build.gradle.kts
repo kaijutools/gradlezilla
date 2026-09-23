@@ -15,6 +15,7 @@ dependencies {
     implementation(libs.sl4j)
 
     testImplementation(kotlin("test"))
+    testImplementation(gradleTestKit())
 }
 
 tasks.test { useJUnitPlatform() }
