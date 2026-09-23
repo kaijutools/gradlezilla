@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ExtractionMetadata(
     val gradleUserHome: String,
+    val projectCacheDir: String,
     val daemonJavaHome: String,
     val jdkVersionSource: String,
     val jdkVersionWarnings: List<String> = emptyList(),

@@ -12,6 +12,7 @@ import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.PrintStream
+import java.security.MessageDigest
 
 /**
  * An isolated, persistent Gradle user home so gradlezilla's daemon never shares a registry
@@ -72,6 +73,28 @@ object GradlezillaHome {
         System.getenv("GRADLEZILLA_GRADLE_HOME")?.let(::File)
             ?: File(System.getProperty("user.home"), ".gradlezilla/gradle-home")
 
+    /**
+     * A persistent, per-project cache directory under [home] — Gradle's `--project-cache-dir`,
+     * which is where configuration-cache entries, task-execution history, etc. actually live.
+     * Left pointed at the target project's own directory (the default), every gradlezilla run
+     * writes a `.gradle/configuration-cache` into someone else's repo — the same problem
+     * [prepare] solves for the Gradle user home. Persistent rather than temp so repeat runs
+     * against the same project stay fast; keyed by a hash of the canonical project path so
+     * distinct projects never collide. Never cleaned up here — same lifetime policy as [prepare]'s
+     * `dir`, left to whatever external housekeeping the user home itself gets.
+     */
+    fun projectCacheDir(
+        home: File,
+        projectDir: File,
+    ): File {
+        val canonicalPath = projectDir.canonicalFile.path
+        val digest = MessageDigest.getInstance("SHA-256").digest(canonicalPath.toByteArray(Charsets.UTF_8))
+        val hash = digest.joinToString("") { "%02x".format(it) }.take(HASH_PREFIX_LENGTH)
+        return File(home, "project-caches/$hash")
+    }
+
+    private const val HASH_PREFIX_LENGTH = 16
+
     /** Non-null when [dir] has content we didn't put there — refuse to clobber it. */
     private fun ownershipProblem(dir: File): String? {
         if (!dir.exists()) return null
@@ -100,6 +123,7 @@ sealed class PinnedConnectionResult<out T> {
  */
 interface PinnedConnection {
     val gradleUserHome: File
+    val projectCacheDir: File
 
     fun <T> model(type: Class<T>): ModelBuilder<T>
 
@@ -121,6 +145,9 @@ interface PinnedConnection {
                     is GradlezillaHome.Prepared.Ready -> result
                 }
 
+            val projectCacheDir = GradlezillaHome.projectCacheDir(prepared.dir, projectDir)
+            projectCacheDir.mkdirs()
+
             // Distribution-download progress (e.g. first-ever run against a Gradle version) is
             // written straight to System.out by the Tooling API's connector bootstrap, outside
             // of setStandardOutput's reach. Redirect process-wide for the connection's lifetime
@@ -136,7 +163,8 @@ interface PinnedConnection {
                         .connect()
 
                 return try {
-                    PinnedConnectionResult.Success(block(RealPinnedConnection(connection, javaHome, prepared.dir)))
+                    val pinned = RealPinnedConnection(connection, javaHome, prepared.dir, projectCacheDir)
+                    PinnedConnectionResult.Success(block(pinned))
                 } finally {
                     connection.close()
                 }
@@ -151,6 +179,7 @@ private class RealPinnedConnection(
     private val connection: ProjectConnection,
     private val javaHome: File,
     override val gradleUserHome: File,
+    override val projectCacheDir: File,
 ) : PinnedConnection {
     override fun <T> model(type: Class<T>): ModelBuilder<T> = connection.model(type).pinned()
 
@@ -160,10 +189,18 @@ private class RealPinnedConnection(
 
     override fun build(): BuildLauncher = connection.newBuild().pinned()
 
+    /**
+     * `withArguments` replaces rather than accumulates, so callers that need their own arguments
+     * (e.g. InitScriptExtractor's init script + cache-bust property) must fold `--project-cache-dir`
+     * into that same call themselves — [projectCacheDir] is exposed on [PinnedConnection] for
+     * exactly that. Set here too so operations that never call `withArguments` (the plain model
+     * fetches in `fetchEnvironment`) still get it.
+     */
     private fun <L : LongRunningOperation> L.pinned(): L =
         apply {
             setJavaHome(javaHome)
             setStandardOutput(System.err)
             setStandardError(System.err)
+            withArguments("--project-cache-dir", projectCacheDir.absolutePath)
         }
 }

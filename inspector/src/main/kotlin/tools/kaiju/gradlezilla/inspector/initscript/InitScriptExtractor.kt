@@ -30,7 +30,7 @@ class InitScriptExtractor : AgpDataExtractor {
             context.connection
                 .build()
                 .forTasks("help")
-                .withArguments(buildInitScriptArguments(initScriptFile))
+                .withArguments(buildInitScriptArguments(initScriptFile, context.connection.projectCacheDir))
                 .setStandardOutput(outputStream)
                 .setStandardError(errorStream)
                 .run()
@@ -109,10 +109,13 @@ class InitScriptExtractor : AgpDataExtractor {
 internal const val CACHE_BUST_PROPERTY = "gradlezillaCacheBust"
 
 /**
- * The configuration cache lives in the target project's own directory, not our isolated Gradle
- * user home — so a pre-existing entry (from the project's own dev workflow, CI, or a prior
- * gradlezilla run) can silently skip the whole configuration phase, including this init script's
- * data-emitting hooks, on any run after the first.
+ * `--project-cache-dir` points configuration-cache entries, task-execution history, etc. at our
+ * own isolated, persistent [PinnedConnection.projectCacheDir] instead of the target project's own
+ * `.gradle` — see [GradlezillaHome.projectCacheDir]. That directory is persistent, not temp
+ * (so repeat runs against the same project stay fast), which means a config-cache entry from a
+ * prior gradlezilla run against this same project can still sit there — so a pre-existing entry
+ * can silently skip the whole configuration phase, including this init script's data-emitting
+ * hooks, on any run after the first.
  *
  * Disabling configuration cache outright (`--no-configuration-cache`) is not an option: Gradle's
  * Isolated Projects feature *mandates* configuration cache and hard-fails
@@ -121,12 +124,24 @@ internal const val CACHE_BUST_PROPERTY = "gradlezillaCacheBust"
  * a system property on every run; `extractor.gradle` reads it via `providers.systemProperty(...)`
  * at script top level, which Gradle tracks as a configuration-cache input. A changed input always
  * forces a full reconfiguration — busting the cache on every run without ever disabling it, so it
- * works whether or not Isolated Projects is on, with no Gradle-version gating needed.
+ * works whether or not Isolated Projects is on, with no Gradle-version gating needed. Confirmed
+ * empirically that this is still required even with an isolated project-cache-dir: with the
+ * cache-bust value held fixed across runs, the *second* run against the same (persistent)
+ * project-cache-dir reused the cached entry and produced no data line at all.
+ *
+ * `withArguments` replaces rather than accumulates prior calls, so `--project-cache-dir` is
+ * re-added here alongside the init script's own arguments rather than relying on
+ * [PinnedConnection]'s base setup.
  */
-internal fun buildInitScriptArguments(initScriptFile: File): List<String> =
+internal fun buildInitScriptArguments(
+    initScriptFile: File,
+    projectCacheDir: File,
+): List<String> =
     listOf(
         "--init-script",
         initScriptFile.absolutePath,
+        "--project-cache-dir",
+        projectCacheDir.absolutePath,
         "-q",
         "-D$CACHE_BUST_PROPERTY=${UUID.randomUUID()}",
     )

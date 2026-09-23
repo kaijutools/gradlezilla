@@ -37,6 +37,7 @@ private class NotApplicableExtractor : AgpDataExtractor {
 
 private object FakePinnedConnection : PinnedConnection {
     override val gradleUserHome: File = File(".")
+    override val projectCacheDir: File = File(".")
 
     override fun <T : Any?> model(type: Class<T>): ModelBuilder<T> = error("not used in this test")
 

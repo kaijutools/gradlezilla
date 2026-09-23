@@ -69,6 +69,7 @@ class GradleProjectInspector(
                 extractionMetadata =
                     ExtractionMetadata(
                         gradleUserHome = connection.gradleUserHome.absolutePath,
+                        projectCacheDir = connection.projectCacheDir.absolutePath,
                         daemonJavaHome = javaHome.absolutePath,
                         jdkVersionSource = resolved.source.wireName(),
                         jdkVersionWarnings = resolved.warnings,

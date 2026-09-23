@@ -92,6 +92,7 @@ class AndroidProjectSpecTest {
                 extractionMetadata =
                     ExtractionMetadata(
                         gradleUserHome = "/home/.gradle",
+                        projectCacheDir = "/home/.gradlezilla/gradle-home/project-caches/abc123",
                         daemonJavaHome = "/opt/jdk-21",
                         jdkVersionSource = "agpMinimum",
                         jdkVersionWarnings = listOf("some warning"),
