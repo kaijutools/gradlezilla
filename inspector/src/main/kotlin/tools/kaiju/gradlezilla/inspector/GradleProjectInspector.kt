@@ -69,6 +69,7 @@ class GradleProjectInspector(
                 extractionMetadata =
                     ExtractionMetadata(
                         gradleUserHome = connection.gradleUserHome.absolutePath,
+                        projectCacheDir = connection.projectCacheDir.absolutePath,
                         daemonJavaHome = javaHome.absolutePath,
                         jdkVersionSource = resolved.source.wireName(),
                         jdkVersionWarnings = resolved.warnings,
@@ -129,6 +130,7 @@ class GradleProjectInspector(
                 try {
                     extractor.extract(context)
                 } catch (e: Exception) {
+                    dumpDebugCauseChain(extractor.name, e)
                     ExtractionOutcome.Failed("${extractor.name} threw an unexpected error", e)
                 }
             when (outcome) {
@@ -148,7 +150,8 @@ class GradleProjectInspector(
                             }
 
                             is ExtractionOutcome.Failed -> {
-                                outcome.cause?.message?.let { "${outcome.reason}: $it" } ?: outcome.reason
+                                outcome.cause?.rootCause()?.message?.let { "${outcome.reason}: $it" }
+                                    ?: outcome.reason
                             }
 
                             is ExtractionOutcome.Found -> {
@@ -159,6 +162,18 @@ class GradleProjectInspector(
                 }
             },
         )
+    }
+
+    /** Under GRADLEZILLA_DEBUG=1, the full cause chain — the wrapper message alone often hides why. */
+    private fun dumpDebugCauseChain(
+        extractorName: String,
+        e: Exception,
+    ) {
+        if (System.getenv("GRADLEZILLA_DEBUG") == null) return
+        System.err.println("[$extractorName] failed with cause chain:")
+        e.causeChain().forEach {
+            System.err.println("  ${it::class.qualifiedName}: ${it.message}")
+        }
     }
 
     private fun collectModules(project: GradleProject): List<ModuleSpec> =

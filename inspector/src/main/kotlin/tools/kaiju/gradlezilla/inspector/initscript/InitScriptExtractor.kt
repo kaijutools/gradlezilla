@@ -1,5 +1,6 @@
 package tools.kaiju.gradlezilla.inspector.initscript
 
+import org.gradle.tooling.GradleConnectionException
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
 import tools.kaiju.gradlezilla.models.ExtractionOutcome
@@ -28,11 +29,8 @@ class InitScriptExtractor : AgpDataExtractor {
             context.connection
                 .build()
                 .forTasks("help")
-                .withArguments(
-                    "--init-script",
-                    initScriptFile.absolutePath,
-                    "-q",
-                ).setStandardOutput(outputStream)
+                .withArguments(buildInitScriptArguments(initScriptFile, context.connection.projectCacheDir))
+                .setStandardOutput(outputStream)
                 .setStandardError(errorStream)
                 .run()
 
@@ -65,6 +63,11 @@ class InitScriptExtractor : AgpDataExtractor {
                 }
             }
         } catch (e: IOException) {
+            dumpDebugOutput(outputStream.toString(), errorStream.toString())
+            // Reason stays generic — GradleProjectInspector.executeExtractionChain appends the
+            // root cause message once, centrally; embedding it here too would duplicate it.
+            ExtractionOutcome.Failed("Failed to extract with init script", e)
+        } catch (e: GradleConnectionException) {
             dumpDebugOutput(outputStream.toString(), errorStream.toString())
             ExtractionOutcome.Failed("Failed to extract with init script", e)
         } finally {
@@ -102,3 +105,44 @@ class InitScriptExtractor : AgpDataExtractor {
         private const val JDK_PREFIX_TAG = "{{JDK_PREFIX}}"
     }
 }
+
+/** Must match the property name `extractor.gradle` reads at script top level. */
+internal const val CACHE_BUST_PROPERTY = "gradlezillaCacheBust"
+
+/**
+ * `--project-cache-dir` points configuration-cache entries, task-execution history, etc. at our
+ * own isolated, persistent [PinnedConnection.projectCacheDir] instead of the target project's own
+ * `.gradle` — see [GradlezillaHome.projectCacheDir]. That directory is persistent, not temp
+ * (so repeat runs against the same project stay fast), which means a config-cache entry from a
+ * prior gradlezilla run against this same project can still sit there — so a pre-existing entry
+ * can silently skip the whole configuration phase, including this init script's data-emitting
+ * hooks, on any run after the first.
+ *
+ * Disabling configuration cache outright (`--no-configuration-cache`) is not an option: Gradle's
+ * Isolated Projects feature *mandates* configuration cache and hard-fails
+ * ("Configuration Cache cannot be disabled when Isolated Projects is enabled") if you try —
+ * confirmed against a real Isolated-Projects project. Instead, a fresh random value is passed as
+ * a system property on every run; `extractor.gradle` reads it via `providers.systemProperty(...)`
+ * at script top level, which Gradle tracks as a configuration-cache input. A changed input always
+ * forces a full reconfiguration — busting the cache on every run without ever disabling it, so it
+ * works whether or not Isolated Projects is on, with no Gradle-version gating needed. Confirmed
+ * empirically that this is still required even with an isolated project-cache-dir: with the
+ * cache-bust value held fixed across runs, the *second* run against the same (persistent)
+ * project-cache-dir reused the cached entry and produced no data line at all.
+ *
+ * `withArguments` replaces rather than accumulates prior calls, so `--project-cache-dir` is
+ * re-added here alongside the init script's own arguments rather than relying on
+ * [PinnedConnection]'s base setup.
+ */
+internal fun buildInitScriptArguments(
+    initScriptFile: File,
+    projectCacheDir: File,
+): List<String> =
+    listOf(
+        "--init-script",
+        initScriptFile.absolutePath,
+        "--project-cache-dir",
+        projectCacheDir.absolutePath,
+        "-q",
+        "-D$CACHE_BUST_PROPERTY=${UUID.randomUUID()}",
+    )
