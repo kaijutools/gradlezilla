@@ -20,6 +20,7 @@ import kotlin.test.assertTrue
 private object FakePinnedConnection : PinnedConnection {
     override val gradleUserHome: File = File(".")
     override val projectCacheDir: File = File(".")
+    override val pinnedArguments: List<String> = emptyList()
 
     override fun <T : Any?> model(type: Class<T>): ModelBuilder<T> = error("not used in this test")
 
@@ -27,7 +28,7 @@ private object FakePinnedConnection : PinnedConnection {
 
     override fun <T : Any?> action(action: BuildAction<T>): BuildActionExecuter<T> = error("not used in this test")
 
-    override fun build(): BuildLauncher = error("not used in this test")
+    override fun build(extraArguments: List<String>): BuildLauncher = error("not used in this test")
 }
 
 class VersionCatalogExtractorTest {

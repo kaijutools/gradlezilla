@@ -108,7 +108,7 @@ Gradlezilla uses a **Chain of Responsibility** of extractors:
 3. **JDK Resolution:** The required JDK is derived from what the project declares — a Gradle daemon JVM criteria pin, toolchain declarations, bytecode targets, or the AGP minimum — never from whichever JVM happens to be running Gradlezilla itself.
 4. **Environment Generation:** These requirements are synthesized into a dynamic `sdkmanager` bash command that installs only what your project strictly requires — nothing more, nothing less.
 
-Running a real Gradle build sounds like it should be slow and flaky — daemon crashes, cache collisions, output that depends on whatever else is running on your machine. Gradlezilla avoids that by giving every invocation its own isolated Gradle user home and project cache directory, pinning the JDK explicitly instead of trusting the ambient one, and busting Gradle's configuration cache with a fresh token on every run so a stale cache entry can never silently skip extraction (see "Known Limitations" below).
+Running a real Gradle build sounds like it should be slow and flaky — daemon crashes, cache collisions, output that depends on whatever else is running on your machine. Gradlezilla avoids that by giving every invocation its own isolated Gradle user home and project cache directory, pinning the JDK explicitly instead of trusting the ambient one, and disabling Gradle's configuration cache for the extraction run so a stale cache entry can never silently skip extraction (see "Known Limitations" below).
 
 ## 📊 Matrix Test Status
 

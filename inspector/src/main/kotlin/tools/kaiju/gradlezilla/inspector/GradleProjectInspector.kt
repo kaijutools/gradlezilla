@@ -46,7 +46,8 @@ class GradleProjectInspector(
             val ctx = ExtractionContext(projectDir, connection, env)
             val agpData = executeExtractionChain(ctx)
 
-            val jdkFacts = extractors.filterIsInstance<InitScriptExtractor>().firstOrNull()?.jdkFacts.orEmpty()
+            val initScriptExtractor = extractors.filterIsInstance<InitScriptExtractor>().firstOrNull()
+            val jdkFacts = initScriptExtractor?.jdkFacts.orEmpty()
             val gradleVersion = GradleVersion.parse(env.gradleVersion)
             val agpVersion = agpData.agpVersion?.let(AgpVersion::parse)
             val resolution = JdkResolver.resolve(daemonJvmCriteriaVersion, jdkFacts, gradleVersion, agpVersion)
@@ -75,6 +76,7 @@ class GradleProjectInspector(
                         jdkVersionSource = resolved.source.wireName(),
                         jdkVersionWarnings = resolved.warnings,
                         nativeBuildWarnings = agpData.nativeBuildWarnings,
+                        extractionArgs = initScriptExtractor?.extractionArgs.orEmpty(),
                     ),
             )
         }

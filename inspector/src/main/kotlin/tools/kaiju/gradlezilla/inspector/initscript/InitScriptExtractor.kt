@@ -20,16 +20,26 @@ class InitScriptExtractor : AgpDataExtractor {
     var jdkFacts: List<ModuleJdkFacts> = emptyList()
         private set
 
+    /**
+     * Populated as a side effect of [extract] — the argument list the extraction ran with, with
+     * the init script's own path replaced by [INIT_SCRIPT_PLACEHOLDER]. That path is a freshly
+     * named temp file every run, and this list is serialized into `--format json` output, which
+     * `e2e/determinism.sh` asserts is byte-identical across consecutive runs.
+     */
+    var extractionArgs: List<String> = emptyList()
+        private set
+
     override fun extract(context: ExtractionContext): ExtractionOutcome {
         val initScriptFile = createInitScript()
         val outputStream = ByteArrayOutputStream()
         val errorStream = ByteArrayOutputStream()
+        val initScriptArgs = buildInitScriptArguments(initScriptFile)
+        extractionArgs = redactInitScriptPath(context.connection.pinnedArguments + initScriptArgs, initScriptFile)
 
         return try {
             context.connection
-                .build()
+                .build(initScriptArgs)
                 .forTasks("help")
-                .withArguments(buildInitScriptArguments(initScriptFile, context.connection.projectCacheDir))
                 .setStandardOutput(outputStream)
                 .setStandardError(errorStream)
                 .run()
@@ -106,43 +116,29 @@ class InitScriptExtractor : AgpDataExtractor {
     }
 }
 
-/** Must match the property name `extractor.gradle` reads at script top level. */
-internal const val CACHE_BUST_PROPERTY = "gradlezillaCacheBust"
+internal const val INIT_SCRIPT_PLACEHOLDER = "<generated init script>"
 
 /**
- * `--project-cache-dir` points configuration-cache entries, task-execution history, etc. at our
- * own isolated, persistent [PinnedConnection.projectCacheDir] instead of the target project's own
- * `.gradle` — see [GradlezillaHome.projectCacheDir]. That directory is persistent, not temp
- * (so repeat runs against the same project stay fast), which means a config-cache entry from a
- * prior gradlezilla run against this same project can still sit there — so a pre-existing entry
- * can silently skip the whole configuration phase, including this init script's data-emitting
- * hooks, on any run after the first.
- *
- * Disabling configuration cache outright (`--no-configuration-cache`) is not an option: Gradle's
- * Isolated Projects feature *mandates* configuration cache and hard-fails
- * ("Configuration Cache cannot be disabled when Isolated Projects is enabled") if you try —
- * confirmed against a real Isolated-Projects project. Instead, a fresh random value is passed as
- * a system property on every run; `extractor.gradle` reads it via `providers.systemProperty(...)`
- * at script top level, which Gradle tracks as a configuration-cache input. A changed input always
- * forces a full reconfiguration — busting the cache on every run without ever disabling it, so it
- * works whether or not Isolated Projects is on, with no Gradle-version gating needed. Confirmed
- * empirically that this is still required even with an isolated project-cache-dir: with the
- * cache-bust value held fixed across runs, the *second* run against the same (persistent)
- * project-cache-dir reused the cached entry and produced no data line at all.
- *
- * `withArguments` replaces rather than accumulates prior calls, so `--project-cache-dir` is
- * re-added here alongside the init script's own arguments rather than relying on
- * [PinnedConnection]'s base setup.
+ * The init script is written to a freshly named temp file on every run, so its path must never
+ * reach `--format json` output — `e2e/determinism.sh` asserts that output is byte-identical
+ * across consecutive runs of the same project.
  */
-internal fun buildInitScriptArguments(
+internal fun redactInitScriptPath(
+    args: List<String>,
     initScriptFile: File,
-    projectCacheDir: File,
-): List<String> =
+): List<String> = args.map { if (it == initScriptFile.absolutePath) INIT_SCRIPT_PLACEHOLDER else it }
+
+/**
+ * Only the arguments specific to *this* extractor. Everything that must hold for every operation
+ * on the connection — the isolated `--project-cache-dir` and the configuration-cache /
+ * Isolated-Projects opt-outs that keep the configuration phase (and so these data hooks) from
+ * being skipped — lives in [PinnedConnection.pinnedArguments] and is appended to by
+ * [PinnedConnection.build], never replaced. See [PinnedConnection.pinnedArguments] for why the
+ * cache is disabled rather than busted with a per-run token.
+ */
+internal fun buildInitScriptArguments(initScriptFile: File): List<String> =
     listOf(
         "--init-script",
         initScriptFile.absolutePath,
-        "--project-cache-dir",
-        projectCacheDir.absolutePath,
         "-q",
-        "-D$CACHE_BUST_PROPERTY=${UUID.randomUUID()}",
     )

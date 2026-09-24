@@ -167,28 +167,56 @@ The mechanisms behind that guarantee, in `models/`:
   someone else's repository.
 - **Pinned JDK per connection** (`PinnedConnection`) — every operation explicitly sets
   `setJavaHome(...)`; gradlezilla never trusts whichever JVM happens to be running the daemon
-  process. `withArguments` *replaces* rather than accumulates, so any new call site that needs
-  extra arguments must re-append `--project-cache-dir` itself (see
-  `InitScriptExtractor.buildInitScriptArguments` for the pattern) — an easy thing to silently
-  drop.
+  process. The Tooling API's `withArguments` *replaces* rather than accumulates, which used to
+  mean every call site needing its own arguments had to remember to re-append
+  `--project-cache-dir` — an easy thing to silently drop. It is now structurally impossible:
+  `withArguments` is called in exactly one place (`RealPinnedConnection.pinned`), and a caller
+  adds arguments by passing them to `PinnedConnection.build(extraArguments)`, which *appends*
+  them to `pinnedArguments`. Don't reintroduce a `withArguments` call outside `pinned`.
 - **JDK version resolved from project config, never the host JVM** (`JdkResolver`,
   `JdkPreflight`) — the required JDK is derived from what the project declares (daemon JVM
   criteria → toolchain → bytecode target → AGP minimum, in that priority order), not from
   `java.home` of the process running gradlezilla. `JdkPreflight` checks the target's Gradle
   wrapper version against the running JDK *before* connecting, so an incompatible pairing fails
   fast with an actionable `JAVA_HOME=...` suggestion instead of an opaque Tooling API error.
-- **Configuration-cache busted with a per-run token, not `--no-configuration-cache`**
-  (`InitScriptExtractor`, `inspector/src/main/resources/extractor.gradle`) — because the
-  project-cache-dir above is persistent, a config-cache entry from a *prior* gradlezilla run
-  against the same project can silently skip the init script's data-emitting hooks entirely on
-  the next run. Disabling configuration cache is not an option: Gradle's Isolated Projects
-  feature mandates it and hard-fails if you try to disable it. Instead, a fresh
-  `-DgradlezillaCacheBust=<uuid>` system property is passed on every run and read via
-  `providers.systemProperty(...)` at the init script's top level — a changed configuration-cache
-  *input* always forces a full reconfiguration, so this busts the cache on every run without
-  ever disabling it. That read is version-gated (`GradleVersion.current() >= 6.1`, since
-  `ProviderFactory.systemProperty` didn't exist earlier) because target-project Gradle support
-  goes back to 5.0 — see `GradleJdkCompatibility`.
+- **Configuration cache deliberately disabled for extraction, not busted per run**
+  (`buildPinnedArguments` in `models/GradlezillaHome.kt`) — because the project-cache-dir above is
+  persistent, a config-cache entry from a *prior* gradlezilla run against the same project would
+  silently skip the init script's data-emitting hooks entirely on the next run. Every operation on
+  a `PinnedConnection` therefore carries **both** of:
+  ```
+  --no-configuration-cache
+  -Dorg.gradle.unsafe.isolated-projects=false
+  ```
+  Both, together. Isolated Projects really does mandate the configuration cache and hard-fails on
+  `--no-configuration-cache` on its own — but Isolated Projects can itself be switched off in the
+  same invocation, and the pair succeeds where either alone does not. Verified by hand against
+  nowinandroid, which enables Isolated Projects:
+  ```bash
+  ./gradlew help --no-configuration-cache                                              # FAILS
+  ./gradlew help --no-configuration-cache -Dorg.gradle.unsafe.isolated-projects=false  # SUCCEEDS
+  ```
+  This replaced an earlier `-DgradlezillaCacheBust=<uuid>` token read via
+  `providers.systemProperty(...)` at the init script's top level. That token worked by changing a
+  configuration-cache *input* every run, which meant it **stored a new cache entry on every
+  invocation** — `~/.gradlezilla/.../project-caches` grew without bound. It also put a
+  `providers` read at init-script top level, which is what caused the Gradle 8.0 regression in
+  #28/#35. Disabling the cache writes no entry at all, so that directory now stays flat.
+  `--no-configuration-cache` is version-gated on the *target* project's Gradle version (>= 6.6,
+  when the option was introduced): Gradle fails the build outright on an unknown command-line
+  option, verified against real 6.0 and 6.5 distributions, and target support goes back to 5.0
+  (`GradleJdkCompatibility`). That version is read from the project's
+  `gradle/wrapper/gradle-wrapper.properties` (`wrapperGradleVersion`), *not* asked of the daemon.
+  A `BuildEnvironment` probe would have to run without the very opt-out it is deciding on, and on
+  a project that sets `org.gradle.configuration-cache=true` that probe stores an entry of its own
+  — observed against nowinandroid, where it put back exactly the per-run cache growth this change
+  removes. No wrapper, or an unparseable one, omits the flag: the safe direction. The `-D` needs
+  no gate; an unrecognised system property is ignored on every version.
+
+  The resulting argument list is reported in `extractionMetadata.extractionArgs`, so `--format
+  json` shows exactly what extraction ran with. The init script's own path is redacted out of it
+  (`redactInitScriptPath`) — it's a fresh temp file every run, and that output has to stay
+  byte-identical across runs.
 - **`GRADLEZILLA_DEBUG=1`** — dumps the full exception cause chain for a failed extractor to
   stderr; the formatted error message alone often hides the real root cause underneath Gradle's
   wrapper exceptions.
