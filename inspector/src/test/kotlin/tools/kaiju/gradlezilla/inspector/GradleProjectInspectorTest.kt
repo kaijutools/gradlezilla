@@ -4,6 +4,7 @@ import org.gradle.tooling.BuildAction
 import org.gradle.tooling.BuildActionExecuter
 import org.gradle.tooling.BuildLauncher
 import org.gradle.tooling.ModelBuilder
+import tools.kaiju.gradlezilla.inspector.versioncatalog.VersionCatalogExtractor
 import tools.kaiju.gradlezilla.models.AgpData
 import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
@@ -12,9 +13,12 @@ import tools.kaiju.gradlezilla.models.GradleProjectEnvironment
 import tools.kaiju.gradlezilla.models.NativeBuildOutcome
 import tools.kaiju.gradlezilla.models.PinnedConnection
 import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private class ThrowingExtractor : AgpDataExtractor {
@@ -137,6 +141,45 @@ class GradleProjectInspectorTest {
         assertTrue(exception.message!!.contains("InitScriptExtractor"))
         assertTrue(exception.message!!.contains("VersionCatalogExtractor"))
         assertFalse(exception.message!!.contains("StaticBuildFileExtractor"))
+    }
+
+    @Test
+    fun executeExtractionChain_initScriptFails_fallbackYieldsNotApplicableAndNoNdk() {
+        // The real production shape of the fallback: the init script blew up, so the chain falls
+        // through to VersionCatalogExtractor — which cannot observe externalNativeBuild. Even with
+        // an ndk entry sitting in the catalog, nothing may reach the spec, or the ~1GB false
+        // positive comes straight back on this path.
+        val projectDir = Files.createTempDirectory("gradlezilla-chain").toFile()
+        try {
+            File(projectDir, "gradle").mkdirs()
+            File(projectDir, "gradle/libs.versions.toml").writeText(
+                """
+                [versions]
+                compileSdk = "34"
+                ndk = "26.1.10909125"
+                """.trimIndent(),
+            )
+
+            val inspector =
+                GradleProjectInspector(
+                    projectDir = projectDir,
+                    extractors = listOf(FailingWithCauseExtractor(), VersionCatalogExtractor()),
+                )
+
+            val result = inspector.executeExtractionChain(fakeContext(projectDir))
+
+            assertEquals(34, result.compileSdk)
+            assertNull(result.ndkVersion)
+            assertNull(result.cmakeVersion)
+
+            val nativeBuild = assertIs<NativeBuildOutcome.NotApplicable>(result.nativeBuild)
+            assertTrue(
+                nativeBuild.reason.contains(VersionCatalogExtractor::class.java.simpleName),
+                "reason should name the fallback that could not observe the build, was: ${nativeBuild.reason}",
+            )
+        } finally {
+            projectDir.deleteRecursively()
+        }
     }
 
     private fun assertThrows(block: () -> Unit): GradleInspectorException {
