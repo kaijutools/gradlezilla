@@ -1,0 +1,18 @@
+{
+  "repo": "Sunflower",
+  "url": "https://github.com/android/sunflower.git",
+  "sha": "25472a6cffbacc8ca3bc64142cf09ad58f0c948e",
+  "commitDate": "2023-07-14",
+  "pinRationale": "Deliberately NOT HEAD (which is on Gradle 8.6 as of 2024-08). Pinned to the last commit on Gradle 8.1 so this repo exercises daemon JDK discovery under a JDK-21 runner: Gradle 8.1 cannot run its daemon on JDK 21, so extraction only succeeds if JdkDiscovery falls back to an alternate JDK on the runner image. Verified locally: with JAVA_HOME=21, extraction succeeds and extractionMetadata.daemonJavaHome resolves to a JDK 17 found via java_home, not JAVA_HOME.",
+  "groundTruthMethod": "gradleVersion/androidSdkVersion/moduleCount were confirmed by reading build files at the pinned commit. jdkVersion and androidBuildToolsVersion are NOT literal build-file values (neither is set explicitly here) — they are gradlezilla's/AGP's own deterministic resolution given this commit's AGP/Gradle/toolchain versions, confirmed by running `gradlezilla generate --dry-run --format json` against this exact pinned checkout twice (once with no Android SDK present at all, once with a full local SDK) and observing byte-identical results both times.",
+  "groundTruth": {
+    "gradleVersion": { "value": "8.1", "source": "gradle/wrapper/gradle-wrapper.properties: distributionUrl=...gradle-8.1-bin.zip" },
+    "jdkVersion": { "value": 17, "source": "verified run: extractionMetadata.jdkVersionSource=\"agpMinimum\" — no explicit Gradle/Kotlin toolchain declared anywhere; AGP 8.0.2 (gradle/libs.versions.toml androidGradlePlugin=8.0.2) requires JDK 17+, which becomes the resolved jdkVersion even though app/macrobenchmark set an explicit sourceCompatibility of only 17 (JavaVersion.VERSION_17 — consistent here, but note this is the AGP floor, not the source compatibility, that actually drives the value)" },
+    "androidSdkVersion": { "value": 33, "source": "gradle/libs.versions.toml: compileSdk = \"33\"" },
+    "androidBuildToolsVersion": { "value": "30.0.3", "source": "verified run: not set anywhere in build.gradle.kts files; this is AGP 8.0.2's own default build-tools version, confirmed identical whether or not any build-tools package is actually installed on the machine" },
+    "moduleCount": { "value": 2, "source": "settings.gradle.kts: include(\":app\"), include(\":macrobenchmark\") — no multi-segment includes, so no implicit parent projects; confirmed by verified run" },
+    "ndkPresent": { "value": false, "source": "no externalNativeBuild configured — no externalNativeBuild.cmake.path or ndkBuild.path on any module, and no CMakeLists.txt / Android.mk anywhere in the tree" },
+    "androidNdkVersion": { "value": null, "source": "not emitted: no module compiles native code. This field was null here before #38 too, but for an unrelated reason — AGP 8.0.2 did not populate its own bundled android.ndkVersion default the way AGP 9.x does" },
+    "androidCmakeVersion": { "value": null, "source": "not emitted: no module uses externalNativeBuild.cmake" }
+  }
+}

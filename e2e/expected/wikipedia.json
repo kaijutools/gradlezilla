@@ -1,0 +1,18 @@
+{
+  "repo": "Wikipedia",
+  "url": "https://github.com/wikimedia/apps-android-wikipedia.git",
+  "sha": "de13f265ebed061d0ccc0030c2ea3d345a35b31a",
+  "commitDate": "2026-09-21",
+  "pinRationale": "Pinned to HEAD at the time this matrix was hardened. Gradle 9.7.1 runs natively on a JDK-21 runner (no discovery fallback needed).",
+  "groundTruthMethod": "gradleVersion/androidSdkVersion were confirmed by reading build files at the pinned commit. moduleCount is NOT the number of include(...) lines (2): settings.gradle.kts has include(\":analytics:testkitchen\") but no include(\":analytics\") — Gradle still creates :analytics as an implicit parent project, so the real count is 3. jdkVersion and androidBuildToolsVersion/androidNdkVersion were confirmed by running `gradlezilla generate --dry-run --format json` against this exact pinned checkout with no Android SDK present at all, proving they are AGP's own deterministic resolution rather than something read from an installed SDK.",
+  "groundTruth": {
+    "gradleVersion": { "value": "9.7.1", "source": "gradle/wrapper/gradle-wrapper.properties: distributionUrl=...gradle-9.7.1-bin.zip" },
+    "jdkVersion": { "value": 17, "source": "verified run: extractionMetadata.jdkVersionSource=\"agpMinimum\" — app/build.gradle sets sourceCompatibility/targetCompatibility/jvmTarget = JavaVersion.VERSION_17/JvmTarget.JVM_17 (a bytecode-compatibility setting, not a toolchain declaration); AGP 9.4.1 (gradle/libs.versions.toml: android-application plugin version.ref=\"gradle\"=\"9.4.1\") requires JDK 17+, which is what resolves (consistent with the explicit 17 here, but the AGP floor is what actually drives it — see signal.json for a case where an explicit toolchain overrides this floor)" },
+    "androidSdkVersion": { "value": 37, "source": "app/build.gradle: compileSdk = 37" },
+    "androidBuildToolsVersion": { "value": "36.0.0", "source": "verified run: not set anywhere in build.gradle files; this is AGP 9.4.1's own default build-tools version (same default observed for Timber's AGP 9.4.0 and Now In Android's AGP 9.3.2 — the AGP 9.x line's default tracks its own release train, not the project's compileSdk of 37)" },
+    "moduleCount": { "value": 3, "source": "settings.gradle.kts explicitly includes only \":app\" and \":analytics:testkitchen\", but Gradle auto-creates \":analytics\" as an implicit parent project for the multi-segment path — confirmed by verified run (modules array: :analytics, :analytics:testkitchen, :app)" },
+    "ndkPresent": { "value": false, "source": "no externalNativeBuild configured — no externalNativeBuild.cmake.path or ndkBuild.path on any module, and no CMakeLists.txt / Android.mk anywhere in the tree" },
+    "androidNdkVersion": { "value": null, "source": "not emitted. AGP populates android.ndkVersion with its own bundled default on every project, native or not, so that field was never evidence of native code — an earlier revision of this file expected \"28.2.13676358\" here for exactly that reason. Since #38 gradlezilla emits an NDK only for modules that actually compile native code" },
+    "androidCmakeVersion": { "value": null, "source": "not emitted: no module uses externalNativeBuild.cmake" }
+  }
+}
