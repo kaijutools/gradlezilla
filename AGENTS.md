@@ -4,6 +4,25 @@
 
 Gradlezilla is a Dockerfile generator CLI for Android, built with Kotlin and [Clikt](https://ajalt.github.io/clikt/).
 
+## Verification rules
+
+- Expected values in `e2e/expected/*.json` are ground truth derived from the target repo's own
+  build files (or AGP's documented defaults) at the pinned commit — never copied from
+  gradlezilla's own output. A `groundTruthMethod` that mentions a "verified run" is only
+  cross-checking that a value stays stable across environments (e.g. with vs. without a local
+  Android SDK present); it never substitutes for reading the actual source of truth.
+- Every check must be able to fail. `e2e/verify-extraction.sh` fails the workflow step it runs in
+  (`matrix-test.yaml`'s "Verify extraction against ground truth" step `exit 1`s on mismatch rather
+  than recording one and returning 0) — a check that reports failure but exits 0 is a bug in the
+  check, not a passing repo. When you change CI or a verification script, prove the new check can
+  actually fail: force a mismatch once (e.g. edit an `e2e/expected/*.json` value) and confirm the
+  run goes red before reverting it.
+- Never mark a test-plan item done in a PR description or report unless it was actually run.
+  Write "not run" and why, rather than assuming a check would have passed.
+- Never loosen an expectation (an `e2e/expected/*.json` value, a schema field, an assertion) to
+  get a run green. Report the mismatch and stop — a loosened expectation is a silent regression
+  wearing a passing badge.
+
 ## Project Structure
 
 ```
@@ -13,17 +32,23 @@ gradlezilla/
 ├── gradle/
 │   └── libs.versions.toml       # Version catalog (all dependency/plugin versions)
 ├── e2e/
-│   └── determinism.sh           # Full-corpus determinism proof, see "Determinism" below
+│   ├── determinism.sh           # Full-corpus determinism proof, see "Determinism" below
+│   ├── verify-extraction.sh     # Ground-truth + schema + invariant checks, see "Repository matrix"
+│   ├── expected/                # Hand-written ground truth per matrix repo (<slug>.json)
+│   └── schema/
+│       └── generate-json.schema.json  # `--format json` field-shape snapshot
+├── .github/workflows/
+│   └── matrix-test.yaml         # Repository Matrix Test, see "Repository matrix" below
 ├── models/                      # Shared data types + the determinism/JDK-resolution machinery:
-│   │                             #   GradlezillaHome, PinnedConnection, JdkResolver, JdkPreflight,
+│   │                             #   GradlezillaHome, PinnedConnection, JdkResolver, JdkSelector,
 │   │                             #   DaemonJvmCriteria, AndroidProjectSpec, ExtractionMetadata
 │   └── src/main/kotlin/tools/kaiju/gradlezilla/models/
 ├── inspector/                    # Introspects a Gradle project (GradleProjectInspector) via the
-│   │                              # Tooling API, an init script (initscript/), and TOML parsing
-│   │                              # (versioncatalog/)
+│   │                              # Tooling API, an init script (initscript/), TOML parsing
+│   │                              # (versioncatalog/), and daemon JDK discovery (JdkDiscovery,
+│   │                              # JdkWindowResolver, DaemonJdk)
 │   └── src/main/kotlin/tools/kaiju/gradlezilla/inspector/
-├── generator/                    # Turns a spec into a Dockerfile — DockerfileGenerator (single
-│   │                              # layer) and LayeredDockerfileGenerator (deps/source split)
+├── generator/                    # Turns a spec into a Dockerfile via DockerfileGenerator
 │   └── src/main/kotlin/tools/kaiju/gradlezilla/generator/
 └── cli/                          # Application module (application plugin)
     ├── build.gradle.kts
@@ -38,17 +63,17 @@ gradlezilla/
 ## Git worktrees
 
 If you create a `git worktree` for this repo (e.g. to work on something in parallel with the
-main checkout), place it as a **sibling** of `main`, not nested inside it:
+main checkout), place it in **a sibling directory of the main checkout**, not nested inside it:
 
 ```
-~/work/Kaiju/gradlezilla/
+<parent-dir>/
 ├── main/            # the primary checkout
 ├── <name>/          # e.g. fix-no-config-cache
 └── <name>/
 ```
 
 ```bash
-git worktree add -b <branch> ~/work/Kaiju/gradlezilla/<name> [<start-point>]
+git worktree add -b <branch> ../<name> [<start-point>]
 ```
 
 Do **not** create worktrees under `main/.claude/worktrees/` (or anywhere else inside `main`'s
@@ -98,13 +123,14 @@ either through the Gradle `:cli:run` task or via the installed launcher
 > may need a different JDK — it has no toolchain of its own and honors
 > `JAVA_HOME` normally.
 
-### `generate <projectDir> [--dry-run|-d] [--layered] [--format human|json|sarif]`
+### `generate <projectDir> [--dry-run|-d] [--daemon-jdk <path>] [--format human|json|sarif]`
 
 Inspects the Android project at `<projectDir>`, infers its toolchain
 requirements, and writes a `Dockerfile` to the project root. With `--dry-run`
-(`-d`) it prints the Dockerfile to stdout instead of writing it. `--layered`
-generates a multi-layer Dockerfile that resolves Gradle dependencies in a
-cacheable layer separate from application source. `--format` selects the
+(`-d`) it prints the Dockerfile to stdout instead of writing it. `--daemon-jdk`
+points the extraction daemon at a specific JDK home, bypassing auto-discovery
+(see "Determinism" below — this is unrelated to `spec.jdkVersion`, which
+`JdkResolver` always derives from the project itself). `--format` selects the
 output shape (`human` by default; `json` and `sarif` for machine consumption —
 see `format/GenerateFormatter.kt` and `format/Sarif.kt`). See `Generate.kt`.
 
@@ -119,7 +145,7 @@ cli/build/install/gradlezilla/bin/gradlezilla generate /path/to/android/app
 cli/build/install/gradlezilla/bin/gradlezilla generate /path/to/android/app --dry-run --format json
 ```
 
-### `inspect <projectDir> [--format human|json|sarif]`
+### `inspect <projectDir> [--daemon-jdk <path>] [--format human|json|sarif]`
 
 Lists the Gradle build tasks (targets) of the project at `<projectDir>`,
 grouped by task group. See `Inspect.kt`.
@@ -130,12 +156,56 @@ grouped by task group. See `Inspect.kt`.
 cli/build/install/gradlezilla/bin/gradlezilla inspect /path/to/gradle/project
 ```
 
+## Generated image model
+
+The Dockerfile `generate` writes is a build **environment**: the JDK and Android SDK packages the
+project's evaluated Gradle configuration says it needs, and nothing else (see
+`Dockerfile.template` and `AndroidSdkPackages`). Source is bind-mounted at `/workspace`, never
+`COPY`'d in, and nothing is built at image-build time — `docker build` only installs the
+toolchain; the actual Gradle build happens later, at `docker run`, against the mounted
+repository. `--layered` and `LayeredDockerfileGenerator` (a second generator that resolved
+dependencies into a cacheable layer separate from source) were removed deliberately in #36 in
+favor of this model. Don't reintroduce a copy-source or dependency-layer Dockerfile shape.
+
+`platform-tools` is installed into the image, unpinned, because AGP 9 otherwise fetches it itself
+at Gradle build time if it isn't already present under `$ANDROID_HOME` — baking it into the image
+at `docker build` time avoids that network fetch (and its result being whatever build is latest
+that day) happening again on every `docker run`.
+
+## Native builds (NDK/CMake)
+
+`androidNdkVersion`/`androidCmakeVersion` are emitted only for modules whose *evaluated* AGP
+extension has `externalNativeBuild.cmake.path` or `externalNativeBuild.ndkBuild.path` set — see
+`ModuleNativeBuild`/`NativeBuildResolver` in `models/NativeBuild.kt`. That's read off the
+evaluated model, not build-file text, so modules configured through `build-logic` convention
+plugins are covered too. Deliberately excluded as signal:
+
+- Prebuilt `.so` files under `jniLibs` and native libraries inside consumed AARs — AGP only uses
+  the NDK to strip these, and merely warns when it's absent.
+- `defaultConfig.ndk { abiFilters ... }`.
+- `android.ndkVersion` alone — AGP populates it with its own bundled default on every project,
+  native or not, which is what made every non-native project pull a ~1GB NDK into its image (see
+  #38, and `e2e/expected/timber.json`'s `androidNdkVersion` note, which records the exact prior
+  false positive).
+
+The version-catalog fallback path can never emit either: it parses `libs.versions.toml`, which has
+no way to see `externalNativeBuild`.
+
+The effect is significant, not cosmetic: for a pure-Kotlin project like Timber, always installing
+an NDK produced a 3.24 GB image; not installing one when nothing needs it drops that to 943 MB
+(verified locally by building both generated Dockerfiles, with and without an `"ndk;..."` package
+added to the `sdkmanager` line).
+
 ## Determinism
 
-Gradlezilla's core promise is that `generate`/`inspect` produce byte-identical output for the
-same project regardless of what else is happening on the host machine (other Gradle daemons,
-other JDKs, a warm vs. cold cache). That guarantee took several dedicated fixes and is proven
-by `e2e/determinism.sh`, not just unit tests — read that script before touching anything
+Gradlezilla's core promise: the same repo commit, generated with the same Gradlezilla version,
+produces byte-identical `generate`/`inspect` output *on a given machine* regardless of what else
+is happening on it (other Gradle daemons, other JDKs, a warm vs. cold cache). Across *different*
+machines, everything in that output is identical too **except** `extractionMetadata`, which
+records machine-specific facts (the Gradle user home path, the project cache dir, which JDK the
+daemon happened to run under) by design — see `ExtractionMetadata` below. That guarantee took
+several dedicated fixes and the same-machine half is proven by `e2e/determinism.sh`, not just
+unit tests — read that script before touching anything
 Tooling-API-related, and run it after any change near `models/GradlezillaHome.kt`,
 `inspector/GradleProjectInspector.kt`, or `inspector/initscript/InitScriptExtractor.kt`:
 
@@ -173,12 +243,25 @@ The mechanisms behind that guarantee, in `models/`:
   `withArguments` is called in exactly one place (`RealPinnedConnection.pinned`), and a caller
   adds arguments by passing them to `PinnedConnection.build(extraArguments)`, which *appends*
   them to `pinnedArguments`. Don't reintroduce a `withArguments` call outside `pinned`.
-- **JDK version resolved from project config, never the host JVM** (`JdkResolver`,
-  `JdkPreflight`) — the required JDK is derived from what the project declares (daemon JVM
-  criteria → toolchain → bytecode target → AGP minimum, in that priority order), not from
-  `java.home` of the process running gradlezilla. `JdkPreflight` checks the target's Gradle
-  wrapper version against the running JDK *before* connecting, so an incompatible pairing fails
-  fast with an actionable `JAVA_HOME=...` suggestion instead of an opaque Tooling API error.
+- **JDK version resolved from project config, never the host JVM** (`JdkResolver`) — the JDK
+  version that goes into the generated Dockerfile (`spec.jdkVersion`) is derived from what the
+  project declares (daemon JVM criteria → toolchain → bytecode target → AGP minimum, in that
+  priority order), not from `java.home` of the process running gradlezilla. There's no flag to
+  override this directly.
+- **Daemon JDK discovered from the machine, not assumed** (`JdkWindowResolver`, `JdkDiscovery`,
+  `JdkSelector`, `DaemonJdk`, all under `inspector/` except `JdkSelector` in `models/`) — a
+  completely separate concern from the JDK version above: which JDK actually runs the Tooling
+  API connection. Before any Gradle connection exists, `JdkWindowResolver` computes the window of
+  acceptable JDK versions purely from files on disk (ceiling from the target's Gradle wrapper via
+  `GradleJdkCompatibility`, floor from AGP/daemon-criteria). `JdkDiscovery` then finds every JDK
+  plausibly installed on the machine (`JAVA_HOME`, the current JVM, `~/.gradle/jdks`, SDKMAN,
+  asdf, mise, and OS-specific well-known locations — see `JdkLocations`), and `JdkSelector`
+  deterministically picks one inside that window: `JAVA_HOME` wins if it's in-window, otherwise
+  the highest in-window LTS release, with a fixed source-priority tie-break so the pick never
+  depends on filesystem iteration order — that determinism is what `e2e/determinism.sh`
+  assertion (3) above depends on. If nothing on the machine fits, `DaemonJdk` fails fast, listing
+  every candidate it found and a command to install a compatible one, instead of an opaque
+  Tooling API error. `--daemon-jdk <path>` bypasses discovery entirely with an explicit path.
 - **Configuration cache deliberately disabled for extraction, not busted per run**
   (`buildPinnedArguments` in `models/GradlezillaHome.kt`) — because the project-cache-dir above is
   persistent, a config-cache entry from a *prior* gradlezilla run against the same project would
@@ -205,7 +288,17 @@ The mechanisms behind that guarantee, in `models/`:
   `--no-configuration-cache` is version-gated on the *target* project's Gradle version (>= 6.6,
   when the option was introduced): Gradle fails the build outright on an unknown command-line
   option, verified against real 6.0 and 6.5 distributions, and target support goes back to 5.0
-  (`GradleJdkCompatibility`). That version is read from the project's
+  (`GradleJdkCompatibility`). That 5.0 floor is design intent, checked only by API-availability
+  inspection — the range actually exercised end-to-end against real distributions is 8.0 through
+  9.7.1: `InitScriptGradleVersionCompatTest` runs the packaged `extractor.gradle` through TestKit
+  against Gradle 8.0 (the exact line that regressed in #28), and the Repository Matrix
+  (`matrix-test.yaml`, see "Repository matrix" below) runs the full CLI against real Android repos
+  on wrapper versions from 8.0 (Signal, Sunflower) through 9.7.1 (Now In Android, Timber,
+  Wikipedia, NDK Samples). Any init-script API newer than Gradle 5.0 must still stay behind an
+  explicit `GradleVersion.current() >= ...` guard with a fallback for older versions; an unguarded
+  newer API silently breaks extraction for every project on an older Gradle instead of failing a
+  test. The target's Gradle version (used to decide whether to add `--no-configuration-cache` at
+  all) is read from the project's
   `gradle/wrapper/gradle-wrapper.properties` (`wrapperGradleVersion`), *not* asked of the daemon.
   A `BuildEnvironment` probe would have to run without the very opt-out it is deciding on, and on
   a project that sets `org.gradle.configuration-cache=true` that probe stores an entry of its own
@@ -235,6 +328,43 @@ The mechanisms behind that guarantee, in `models/`:
 - `:cli:run` always executes under this project's own pinned JDK 17 toolchain and ignores
   `JAVA_HOME` (see the note under "gradlezilla CLI commands" above) — don't use it to
   sanity-check JDK-resolution behavior; use the installed launcher.
+- Don't run `e2e/determinism.sh` concurrently with another Gradle build on the same machine.
+  `build_cli()` runs `./gradlew :cli:installDist` against the ambient, un-overridden Gradle user
+  home — only the target-extraction runs later in the script get an isolated
+  `GRADLEZILLA_GRADLE_HOME`. Two builds sharing that ambient home (another `e2e/determinism.sh`,
+  or your own `./gradlew` in another terminal) can hit real Gradle daemon/cache contention and
+  fail spuriously.
+- `e2e/determinism.sh`'s `cleanup()` trap fires on any exit and deletes `WORK_DIR` — including the
+  per-run stderr logs — even on failure, so a failing run's diagnostics are gone by the time you
+  see the failure message ([#42](https://github.com/kaijutools/gradlezilla/issues/42)). Until
+  it's fixed, comment out `trap cleanup EXIT` locally if you need to inspect a failure.
+
+### Repository matrix
+
+`.github/workflows/matrix-test.yaml` runs the full CLI against a small corpus of real, pinned
+Android repos on every tag push (and on demand via `workflow_dispatch`), verified by
+`e2e/verify-extraction.sh` against `e2e/expected/<slug>.json`.
+
+To add a corpus repo:
+
+1. Pick a commit SHA to pin to — never a branch, since the corpus must stay reproducible.
+2. Add it to the `matrix.repo` list in `matrix-test.yaml` (`name`, `slug`, `url`, `sha`).
+3. Write `e2e/expected/<slug>.json` by hand from that commit's actual build files (see
+   "Verification rules" above) — `groundTruth`, `groundTruthMethod`, and `pinRationale` are all
+   required; `pinRationale` should say what real-world condition this repo is pinned to exercise
+   (e.g. an old Gradle version, a genuine NDK build).
+
+`e2e/schema/generate-json.schema.json` is a hand-written snapshot of `--format json`'s field
+names/types (required vs. optional, per each field's Kotlin default) — `verify-extraction.sh`
+fails a run whose JSON has a key outside it, or is missing a required key, so an accidental
+rename or dropped field becomes a red matrix run instead of a silent regression. Regenerate it by
+hand whenever a spec field's shape or default-ness changes, in the same PR as that change.
+
+The matrix's "Prime target repo" step deliberately runs the target repo's own `./gradlew help`
+under JDK 17 while the runner's ambient `JAVA_HOME` (and the `gradlezilla` steps that follow) stay
+on JDK 21 — Gradle 8.0 (Signal, Sunflower) cannot run its daemon on JDK 21 at all, so this is what
+actually exercises `JdkDiscovery`'s fallback to an alternate JDK on the runner image, rather than
+every repo just working on the ambient JDK by coincidence.
 
 ## Tech Stack
 
@@ -324,3 +454,15 @@ dependencies {
 ### Package naming
 
 All source lives under `tools.kaiju.gradlezilla.<module>` (e.g., `tools.kaiju.gradlezilla.cli`).
+
+## Pull requests
+
+- Titles follow [Conventional Commits](https://www.conventionalcommits.org/)
+  (`fix(inspector): ...`, `feat(generator)!: ...`) — see recent history for the pattern. Use `!`
+  only for a change a user of the CLI or generated Dockerfile would notice as breaking (a flag
+  removed, an output shape changed, a documented guarantee narrowed) — not for internal
+  refactors.
+- Don't retitle a PR after opening it: this repo squash-merges, and the squash commit takes the
+  PR's title verbatim.
+- The PR description must state what was actually verified (commands run, and their output or
+  exit code), not just what was intended — see "Verification rules" above.
