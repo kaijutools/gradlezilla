@@ -90,6 +90,7 @@ private fun AndroidProjectSpec.humanSummary(): String =
         add("Android sdk: $androidSdkVersion")
         add("Build tools: $androidBuildToolsVersion")
         add("Ndk: $androidNdkVersion")
+        add("Cmake: $androidCmakeVersion")
     }.joinToString("\n")
 
 @Serializable

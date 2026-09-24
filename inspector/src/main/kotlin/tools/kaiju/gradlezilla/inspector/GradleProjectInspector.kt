@@ -62,6 +62,7 @@ class GradleProjectInspector(
                 androidSdkVersion = agpData.compileSdk,
                 androidBuildToolsVersion = agpData.buildToolsVersion,
                 androidNdkVersion = agpData.ndkVersion,
+                androidCmakeVersion = agpData.cmakeVersion,
                 modules = env.modules,
                 hasBuildSrc = env.hasBuildSrc,
                 hasBuildLogic = env.hasBuildLogic,
@@ -73,6 +74,7 @@ class GradleProjectInspector(
                         daemonJdkSource = daemonJdk.source.wireName(),
                         jdkVersionSource = resolved.source.wireName(),
                         jdkVersionWarnings = resolved.warnings,
+                        nativeBuildWarnings = agpData.nativeBuildWarnings,
                     ),
             )
         }
