@@ -15,15 +15,15 @@ gradlezilla/
 ├── e2e/
 │   └── determinism.sh           # Full-corpus determinism proof, see "Determinism" below
 ├── models/                      # Shared data types + the determinism/JDK-resolution machinery:
-│   │                             #   GradlezillaHome, PinnedConnection, JdkResolver, JdkPreflight,
+│   │                             #   GradlezillaHome, PinnedConnection, JdkResolver, JdkSelector,
 │   │                             #   DaemonJvmCriteria, AndroidProjectSpec, ExtractionMetadata
 │   └── src/main/kotlin/tools/kaiju/gradlezilla/models/
 ├── inspector/                    # Introspects a Gradle project (GradleProjectInspector) via the
-│   │                              # Tooling API, an init script (initscript/), and TOML parsing
-│   │                              # (versioncatalog/)
+│   │                              # Tooling API, an init script (initscript/), TOML parsing
+│   │                              # (versioncatalog/), and daemon JDK discovery (JdkDiscovery,
+│   │                              # JdkWindowResolver, DaemonJdk)
 │   └── src/main/kotlin/tools/kaiju/gradlezilla/inspector/
-├── generator/                    # Turns a spec into a Dockerfile — DockerfileGenerator (single
-│   │                              # layer) and LayeredDockerfileGenerator (deps/source split)
+├── generator/                    # Turns a spec into a Dockerfile via DockerfileGenerator
 │   └── src/main/kotlin/tools/kaiju/gradlezilla/generator/
 └── cli/                          # Application module (application plugin)
     ├── build.gradle.kts
@@ -98,13 +98,14 @@ either through the Gradle `:cli:run` task or via the installed launcher
 > may need a different JDK — it has no toolchain of its own and honors
 > `JAVA_HOME` normally.
 
-### `generate <projectDir> [--dry-run|-d] [--layered] [--format human|json|sarif]`
+### `generate <projectDir> [--dry-run|-d] [--daemon-jdk <path>] [--format human|json|sarif]`
 
 Inspects the Android project at `<projectDir>`, infers its toolchain
 requirements, and writes a `Dockerfile` to the project root. With `--dry-run`
-(`-d`) it prints the Dockerfile to stdout instead of writing it. `--layered`
-generates a multi-layer Dockerfile that resolves Gradle dependencies in a
-cacheable layer separate from application source. `--format` selects the
+(`-d`) it prints the Dockerfile to stdout instead of writing it. `--daemon-jdk`
+points the extraction daemon at a specific JDK home, bypassing auto-discovery
+(see "Determinism" below — this is unrelated to `spec.jdkVersion`, which
+`JdkResolver` always derives from the project itself). `--format` selects the
 output shape (`human` by default; `json` and `sarif` for machine consumption —
 see `format/GenerateFormatter.kt` and `format/Sarif.kt`). See `Generate.kt`.
 
@@ -119,7 +120,7 @@ cli/build/install/gradlezilla/bin/gradlezilla generate /path/to/android/app
 cli/build/install/gradlezilla/bin/gradlezilla generate /path/to/android/app --dry-run --format json
 ```
 
-### `inspect <projectDir> [--format human|json|sarif]`
+### `inspect <projectDir> [--daemon-jdk <path>] [--format human|json|sarif]`
 
 Lists the Gradle build tasks (targets) of the project at `<projectDir>`,
 grouped by task group. See `Inspect.kt`.
@@ -132,10 +133,14 @@ cli/build/install/gradlezilla/bin/gradlezilla inspect /path/to/gradle/project
 
 ## Determinism
 
-Gradlezilla's core promise is that `generate`/`inspect` produce byte-identical output for the
-same project regardless of what else is happening on the host machine (other Gradle daemons,
-other JDKs, a warm vs. cold cache). That guarantee took several dedicated fixes and is proven
-by `e2e/determinism.sh`, not just unit tests — read that script before touching anything
+Gradlezilla's core promise: the same repo commit, generated with the same Gradlezilla version,
+produces byte-identical `generate`/`inspect` output *on a given machine* regardless of what else
+is happening on it (other Gradle daemons, other JDKs, a warm vs. cold cache). Across *different*
+machines, everything in that output is identical too **except** `extractionMetadata`, which
+records machine-specific facts (the Gradle user home path, the project cache dir, which JDK the
+daemon happened to run under) by design — see `ExtractionMetadata` below. That guarantee took
+several dedicated fixes and the same-machine half is proven by `e2e/determinism.sh`, not just
+unit tests — read that script before touching anything
 Tooling-API-related, and run it after any change near `models/GradlezillaHome.kt`,
 `inspector/GradleProjectInspector.kt`, or `inspector/initscript/InitScriptExtractor.kt`:
 
@@ -173,12 +178,25 @@ The mechanisms behind that guarantee, in `models/`:
   `withArguments` is called in exactly one place (`RealPinnedConnection.pinned`), and a caller
   adds arguments by passing them to `PinnedConnection.build(extraArguments)`, which *appends*
   them to `pinnedArguments`. Don't reintroduce a `withArguments` call outside `pinned`.
-- **JDK version resolved from project config, never the host JVM** (`JdkResolver`,
-  `JdkPreflight`) — the required JDK is derived from what the project declares (daemon JVM
-  criteria → toolchain → bytecode target → AGP minimum, in that priority order), not from
-  `java.home` of the process running gradlezilla. `JdkPreflight` checks the target's Gradle
-  wrapper version against the running JDK *before* connecting, so an incompatible pairing fails
-  fast with an actionable `JAVA_HOME=...` suggestion instead of an opaque Tooling API error.
+- **JDK version resolved from project config, never the host JVM** (`JdkResolver`) — the JDK
+  version that goes into the generated Dockerfile (`spec.jdkVersion`) is derived from what the
+  project declares (daemon JVM criteria → toolchain → bytecode target → AGP minimum, in that
+  priority order), not from `java.home` of the process running gradlezilla. There's no flag to
+  override this directly.
+- **Daemon JDK discovered from the machine, not assumed** (`JdkWindowResolver`, `JdkDiscovery`,
+  `JdkSelector`, `DaemonJdk`, all under `inspector/` except `JdkSelector` in `models/`) — a
+  completely separate concern from the JDK version above: which JDK actually runs the Tooling
+  API connection. Before any Gradle connection exists, `JdkWindowResolver` computes the window of
+  acceptable JDK versions purely from files on disk (ceiling from the target's Gradle wrapper via
+  `GradleJdkCompatibility`, floor from AGP/daemon-criteria). `JdkDiscovery` then finds every JDK
+  plausibly installed on the machine (`JAVA_HOME`, the current JVM, `~/.gradle/jdks`, SDKMAN,
+  asdf, mise, and OS-specific well-known locations — see `JdkLocations`), and `JdkSelector`
+  deterministically picks one inside that window: `JAVA_HOME` wins if it's in-window, otherwise
+  the highest in-window LTS release, with a fixed source-priority tie-break so the pick never
+  depends on filesystem iteration order — that determinism is what `e2e/determinism.sh`
+  assertion (3) above depends on. If nothing on the machine fits, `DaemonJdk` fails fast, listing
+  every candidate it found and a command to install a compatible one, instead of an opaque
+  Tooling API error. `--daemon-jdk <path>` bypasses discovery entirely with an explicit path.
 - **Configuration cache deliberately disabled for extraction, not busted per run**
   (`buildPinnedArguments` in `models/GradlezillaHome.kt`) — because the project-cache-dir above is
   persistent, a config-cache entry from a *prior* gradlezilla run against the same project would

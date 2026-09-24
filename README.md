@@ -39,11 +39,6 @@ Gradlezilla will analyze your `build.gradle` / `build.gradle.kts` files, infer t
   gradlezilla generate . -d
   ```
 
-* **Layered Builds:** Generate a multi-layer Dockerfile that resolves Gradle dependencies in a cacheable layer separate from your application source, so source-only edits don't invalidate the dependency layer:
-  ```bash
-  gradlezilla generate . --layered
-  ```
-
 * **Machine-Readable Output:** For CI pipelines and other tooling, emit `json` or `sarif` instead of the human-readable summary:
   ```bash
   gradlezilla generate . --dry-run --format json
@@ -51,9 +46,12 @@ Gradlezilla will analyze your `build.gradle` / `build.gradle.kts` files, infer t
 
 Gradlezilla always derives the required JDK version from what your project itself declares — a
 Gradle daemon JVM criteria pin, toolchain declarations, bytecode targets, or your AGP version's
-minimum — never from whichever JVM happens to launch it. There's no manual `--jdk` override: if
-your project's Gradle wrapper doesn't support the JDK you're currently running, Gradlezilla fails
-fast with the `JAVA_HOME` to set instead of silently building under the wrong one.
+minimum — never from whichever JVM happens to launch it. There's no manual `--jdk` override for
+that. Separately, to actually run your project's Gradle daemon during inspection, Gradlezilla
+searches your machine (`JAVA_HOME`, the current JVM, SDKMAN, asdf, mise, and OS-specific install
+locations) for a JDK compatible with your project's Gradle wrapper, and fails fast — listing
+every JDK it found plus a command to install a compatible one — if nothing on the machine fits.
+Use `--daemon-jdk <path>` to point it at a specific JDK instead of relying on discovery.
 
 ### Inspecting a Project
 
@@ -71,11 +69,14 @@ code is never copied into the image — mount your repository in at `/workspace`
 Gradle there:
 
 ```bash
-# 1. Build the environment image
-docker build -t my-android-env .
+# 1. Build the environment image — no build context needed, since nothing is copied in
+docker build -t my-android-env - < Dockerfile
 
-# 2. Run Gradle inside it, against your mounted repository
-docker run --rm -v "$PWD:/workspace" my-android-env ./gradlew assembleDebug
+# 2. Run Gradle inside it, against your mounted repository and a persistent Gradle cache
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -v gradlezilla-cache:/root/.gradle \
+  my-android-env ./gradlew assembleDebug
 ```
 
 Because the repository is mounted rather than copied, the APK lands directly at
@@ -110,6 +111,16 @@ Gradlezilla uses a **Chain of Responsibility** of extractors:
 
 Running a real Gradle build sounds like it should be slow and flaky — daemon crashes, cache collisions, output that depends on whatever else is running on your machine. Gradlezilla avoids that by giving every invocation its own isolated Gradle user home and project cache directory, pinning the JDK explicitly instead of trusting the ambient one, and disabling Gradle's configuration cache for the extraction run so a stale cache entry can never silently skip extraction (see "Known Limitations" below).
 
+### Determinism
+
+Gradlezilla's contract: the same repository commit, generated with the same Gradlezilla version,
+produces an identical spec on the same machine — regardless of what else is running on it (other
+Gradle daemons, other JDKs, a warm vs. cold cache). Across *different* machines, everything in
+that spec is identical too **except** `extractionMetadata`, which records machine-specific facts
+(the Gradle user home path, the project cache dir, which JDK the daemon happened to run under) by
+design. See `AGENTS.md`'s "Determinism" section for the mechanisms behind this and
+`e2e/determinism.sh` for the proof.
+
 ## 📊 Matrix Test Status
 
 Results from the latest [Repository Matrix Test](.github/workflows/matrix-test.yaml) run on `main`.
@@ -140,14 +151,44 @@ runs against it reuse the cached distribution.
 CI users should cache the `GRADLEZILLA_GRADLE_HOME` directory between runs to avoid paying
 the warm-up cost on every job.
 
-The init script used for extraction (`extractor.gradle`) targets Gradle 5.0 as its minimum
-supported version, matching the floor `GradleJdkCompatibility` already assumes elsewhere in the
-codebase. This is verified empirically (not just by API-availability inspection) against a real
-Gradle 5.0 distribution as part of the test suite — see `InitScriptGradleVersionCompatTest`. Any
-API used in the script that's newer than Gradle 5.0 must stay behind an explicit
-`GradleVersion.current() >= ...` guard with a fallback (or a no-op) for older versions; an
-unguarded newer API silently breaks extraction for every project on an older Gradle instead of
-failing a test.
+The init script used for extraction (`extractor.gradle`) is *designed* to support Gradle back to
+5.0, matching the floor `GradleJdkCompatibility` assumes elsewhere in the codebase — but that
+floor is only checked by API-availability inspection, not by running a real Gradle 5.0
+distribution. What's actually exercised end-to-end against real distributions: the packaged
+`extractor.gradle` runs through TestKit against Gradle 8.0 (`InitScriptGradleVersionCompatTest`,
+pinning the exact line that regressed in #28), and the [Repository Matrix
+Test](.github/workflows/matrix-test.yaml) runs the full CLI against real Android repos on wrapper
+versions from 8.0 through 9.7.1. Treat 8.0 through 9.7 as the range Gradlezilla is actually
+tested against, not 5.0. Any API used in the script that's newer than Gradle 5.0 must still stay
+behind an explicit `GradleVersion.current() >= ...` guard with a fallback (or a no-op) for older
+versions; an unguarded newer API silently breaks extraction for every project on an older Gradle
+instead of failing a test.
+
+The generated Dockerfile's base image (`eclipse-temurin:<jdk>-jdk-jammy`) is a floating tag, not
+a digest pin, and the `platform-tools` SDK package has no version you can pin at all — both can
+silently pick up a newer build on a fresh `docker build`. Pin the base image by digest yourself
+or vendor the generated Dockerfile if you need a byte-for-byte reproducible image.
+
+Because your repository is bind-mounted rather than copied, anything in it — including a host
+`local.properties` with a host-specific `sdk.dir` — is visible inside the container exactly as it
+sits on your host. Gradlezilla doesn't sandbox or strip it.
+
+JVM/daemon memory settings (`org.gradle.jvmargs`, `kotlin.daemon.jvmargs`, etc.) normally live in
+your `~/.gradle/gradle.properties` on the host, which isn't baked into the generated image. Pass
+them explicitly with `-P` on the `./gradlew` invocation, or bind-mount your own
+`~/.gradle/gradle.properties` into the container's Gradle user home.
+
+The generated image runs as root by default, so build outputs (`build/`, `.gradle/`) written back
+through the bind mount end up root-owned on Linux hosts. Run with `--user "$(id -u):$(id -g)"`
+and give that user a writable Gradle home (e.g. a cache volume you `chown` first, or
+`-e GRADLE_USER_HOME=/workspace/.gradle-home`).
+
+Don't point two concurrently running containers at the same Gradle cache volume — Gradle's own
+locking assumes one daemon per `GRADLE_USER_HOME`, and concurrent writers can corrupt the cache.
+
+JDK discovery for the extraction daemon (see "Usage" above) is best-effort on Windows: it checks
+`JAVA_HOME`, the current JVM, and common installer locations, but hasn't been verified against
+Windows JDK layouts the way the macOS/Linux paths have.
 
 ## 🤝 Contributing
 
