@@ -98,6 +98,16 @@ class AndroidProjectSpecTest {
                         jdkVersionSource = "agpMinimum",
                         jdkVersionWarnings = listOf("some warning"),
                         nativeBuildWarnings = listOf("some native warning"),
+                        extractionArgs =
+                            listOf(
+                                "--project-cache-dir",
+                                "/home/.gradlezilla/gradle-home/project-caches/abc123",
+                                "--no-configuration-cache",
+                                "-Dorg.gradle.unsafe.isolated-projects=false",
+                                "--init-script",
+                                "/tmp/gradlezilla-ext.gradle",
+                                "-q",
+                            ),
                     ),
             )
 
