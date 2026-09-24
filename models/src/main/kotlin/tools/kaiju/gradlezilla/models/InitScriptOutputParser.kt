@@ -45,10 +45,8 @@ object InitScriptOutputParser {
             AgpData(
                 compileSdk = compileSdk,
                 buildToolsVersion = properties["buildTools"],
-                ndkVersion = (native as? NativeBuildOutcome.Found)?.ndkVersion,
+                nativeBuild = native,
                 agpVersion = properties["agpVersion"],
-                cmakeVersion = (native as? NativeBuildOutcome.Found)?.cmakeVersion,
-                nativeBuildWarnings = (native as? NativeBuildOutcome.Found)?.warnings.orEmpty(),
             ),
         )
     }

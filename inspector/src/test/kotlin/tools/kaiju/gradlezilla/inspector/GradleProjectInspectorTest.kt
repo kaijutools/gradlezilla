@@ -9,6 +9,7 @@ import tools.kaiju.gradlezilla.models.AgpDataExtractor
 import tools.kaiju.gradlezilla.models.ExtractionContext
 import tools.kaiju.gradlezilla.models.ExtractionOutcome
 import tools.kaiju.gradlezilla.models.GradleProjectEnvironment
+import tools.kaiju.gradlezilla.models.NativeBuildOutcome
 import tools.kaiju.gradlezilla.models.PinnedConnection
 import java.io.File
 import kotlin.test.Test
@@ -26,7 +27,13 @@ private class SucceedingExtractor : AgpDataExtractor {
     override val name = "SucceedingExtractor"
 
     override fun extract(context: ExtractionContext): ExtractionOutcome =
-        ExtractionOutcome.Found(AgpData(compileSdk = 34, buildToolsVersion = null, ndkVersion = null))
+        ExtractionOutcome.Found(
+            AgpData(
+                compileSdk = 34,
+                buildToolsVersion = null,
+                nativeBuild = NativeBuildOutcome.NotApplicable("no externalNativeBuild configured"),
+            ),
+        )
 }
 
 private class NotApplicableExtractor : AgpDataExtractor {

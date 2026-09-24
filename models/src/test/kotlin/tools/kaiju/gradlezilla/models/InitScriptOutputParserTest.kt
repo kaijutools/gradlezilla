@@ -13,10 +13,9 @@ class InitScriptOutputParserTest {
                 "::nativeBuild=ndkBuild"
         val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
 
-        assertEquals(
-            AgpData(compileSdk = 34, buildToolsVersion = "34.0.0", ndkVersion = "25.1.8937393"),
-            result.data,
-        )
+        assertEquals(34, result.data.compileSdk)
+        assertEquals("34.0.0", result.data.buildToolsVersion)
+        assertEquals("25.1.8937393", result.data.ndkVersion)
     }
 
     @Test
@@ -66,7 +65,9 @@ class InitScriptOutputParserTest {
         val output = "GRADLEZILLA_AGP_DATA::compileSdk=34::garbage::buildTools=34.0.0"
         val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
 
-        assertEquals(AgpData(compileSdk = 34, buildToolsVersion = "34.0.0", ndkVersion = null), result.data)
+        assertEquals(34, result.data.compileSdk)
+        assertEquals("34.0.0", result.data.buildToolsVersion)
+        assertNull(result.data.ndkVersion)
     }
 
     @Test
@@ -85,7 +86,9 @@ class InitScriptOutputParserTest {
         val output = "GRADLEZILLA_AGP_DATA::compileSdk=34"
         val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
 
-        assertEquals(AgpData(compileSdk = 34, buildToolsVersion = null, ndkVersion = null), result.data)
+        assertEquals(34, result.data.compileSdk)
+        assertNull(result.data.buildToolsVersion)
+        assertNull(result.data.ndkVersion)
     }
 
     @Test
