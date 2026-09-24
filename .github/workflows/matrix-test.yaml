@@ -10,7 +10,9 @@ jobs:
   test-repo:
     name: Test ${{ matrix.repo.name }}
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # No continue-on-error: a repo whose assertions fail must fail its job, and with it the
+    # workflow. fail-fast stays off so one bad repo doesn't cancel the others — every repo is
+    # still measured, they just no longer report green when they aren't.
     strategy:
       fail-fast: false
       matrix:
@@ -104,7 +106,12 @@ jobs:
       # a real developer's checkout would already have before ever touching gradlezilla.
       - name: Prime target repo (own daemon + configuration-cache entry)
         working-directory: target-repo
-        run: ./gradlew help --console=plain
+        # Primed under JDK 17, not the runner's ambient 21: Gradle 8.0 cannot parse JDK-21 class
+        # files ("Unsupported class file major version 65"), so Signal failed here before
+        # gradlezilla ever ran. Every corpus repo's Gradle (8.0 through 9.7.1) supports 17. The
+        # gradlezilla steps below deliberately keep JAVA_HOME at 21, so getting Signal and
+        # Sunflower onto a compatible daemon remains JdkDiscovery's job — which is the point.
+        run: JAVA_HOME="$JAVA_HOME_17_X64" ./gradlew help --console=plain
 
       - name: Snapshot target repo's configuration-cache before extraction
         working-directory: target-repo
@@ -234,6 +241,15 @@ jobs:
           merge-multiple: true
           path: results/
 
+      # Not merged: every spec artifact contains a file called run1.json, so merging would
+      # collapse them onto each other. One directory per job index is also what lets the gate
+      # below tell which repo's spec went missing.
+      - name: Download extracted specs
+        uses: actions/download-artifact@v8
+        with:
+          pattern: spec-*
+          path: specs/
+
       - name: Compile Markdown Table
         run: |
           SHORT_SHA=${GITHUB_SHA:0:7}
@@ -284,3 +300,44 @@ jobs:
             git commit -m "chore: update matrix test results in README"
             git push origin HEAD:main
           fi
+
+      # Last, so the report and the README still record what happened before the run goes red.
+      # This job is the workflow's single source of truth for pass/fail: it is the only one that
+      # sees every repo at once, and `if: always()` means a matrix leg that died before
+      # uploading anything cannot quietly drop out of the tally.
+      - name: Fail the run if any repo failed
+        if: always()
+        run: |
+          failed=0
+
+          # Catches legs that failed, were cancelled, or never ran — including ones that produced
+          # no artifacts at all, which the per-file checks below could not see.
+          if [[ "${{ needs.test-repo.result }}" != "success" ]]; then
+            echo "::error::test-repo matrix result is '${{ needs.test-repo.result }}'"
+            failed=1
+          fi
+
+          shopt -s nullglob
+          reports=(results/result-*.md)
+          if [[ ${#reports[@]} -eq 0 ]]; then
+            echo "::error::no per-repo reports were uploaded — every matrix leg failed before reporting"
+            failed=1
+          fi
+
+          for report in "${reports[@]}"; do
+            index="${report##*result-}"
+            index="${index%.md}"
+            if grep -q "❌" "$report"; then
+              echo "::error::$(head -1 "$report")"
+              failed=1
+            fi
+            if [[ ! -s "specs/spec-$index/run1.json" ]]; then
+              echo "::error::spec artifact missing or empty for job index $index"
+              failed=1
+            fi
+          done
+
+          if [[ "$failed" -eq 0 ]]; then
+            echo "All ${#reports[@]} repos passed, each with an extracted spec artifact."
+          fi
+          exit "$failed"
