@@ -68,6 +68,9 @@ if [[ "$run1_valid" != "true" ]]; then
         echo
         printf '%s\n' "${checks[@]}"
     } >"$REPORT_OUT"
+    # Also to stdout: the report file only reaches a human after the artifact is downloaded,
+    # and a failure should be readable in the job log itself.
+    cat "$REPORT_OUT"
     exit 1
 fi
 
@@ -181,5 +184,9 @@ fi
     echo
     printf '%s\n' "${checks[@]}"
 } >"$REPORT_OUT"
+
+# Also to stdout: the report file only reaches a human after the artifact is downloaded, and a
+# mismatch should be readable straight from the job log.
+cat "$REPORT_OUT"
 
 [[ "$overall_ok" == "true" ]]

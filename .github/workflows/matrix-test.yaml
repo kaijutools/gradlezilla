@@ -191,6 +191,10 @@ jobs:
             echo "status=✅ Passed" >>"$GITHUB_OUTPUT"
           else
             echo "status=❌ Failed" >>"$GITHUB_OUTPUT"
+            # Fail here, at the mismatch, rather than recording it and exiting 0. The steps that
+            # still have to run for a failing repo — the report and both artifact uploads — are
+            # all marked if: always(), so failing here costs no diagnostics.
+            exit 1
           fi
 
       - name: Upload extracted spec (JSON)
@@ -217,10 +221,6 @@ jobs:
             summary-${{ strategy.job-index }}.md
             result-${{ strategy.job-index }}.md
           retention-days: 1
-
-      - name: Fail job if any check failed
-        if: steps.verify.outputs.status != '✅ Passed'
-        run: exit 1
 
   generate-report:
     name: Generate Markdown Report
