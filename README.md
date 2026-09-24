@@ -1,12 +1,10 @@
 # 🦖 Gradlezilla
 
-**Zero-config, highly-optimized Dockerfiles for Android projects in under 5 seconds.**
+**Correct, reproducible Android build environments, derived from your Gradle build.**
 
 Writing and maintaining Dockerfiles for Android CI/CD is notoriously painful. You have to perfectly pin the JDK, Android SDK, Build Tools, Command Line Tools, and NDK versions, or your build crashes. 
 
-Gradlezilla introspects your Android project, extracts the exact toolchain requirements, and generates a production-ready, immutable Docker environment. No Gradle Daemon crashes. No host bleed-through. Just reliable builds.
-
-![Gradlezilla Demo](docs/demo.gif)
+Gradlezilla introspects your Android project — via a real Gradle Tooling API connection, not text parsing — and generates a Dockerfile for exactly the toolchain it needs. Extraction is deterministic: the same commit and Gradlezilla version produce the same result on a given machine, isolated from other Gradle daemons and caches already running on it (see "Determinism" below).
 
 ## 🚀 Installation
 
@@ -28,7 +26,7 @@ cd /path/to/your/android/app
 gradlezilla generate .
 ```
 
-Gradlezilla will analyze your `build.gradle` / `build.gradle.kts` files, infer the correct versions, and write a perfectly formatted `Dockerfile` directly to your project root.
+Gradlezilla asks Gradle itself for your project's evaluated configuration — not your `build.gradle` / `build.gradle.kts` files as text — and writes a `Dockerfile` directly to your project root with exactly the versions that configuration resolves to.
 
 ### Options & Flags
 
@@ -43,6 +41,7 @@ Gradlezilla will analyze your `build.gradle` / `build.gradle.kts` files, infer t
   ```bash
   gradlezilla generate . --dry-run --format json
   ```
+  `--format json` is meant to be consumed directly by scripts and AI agents, not just humans — it's a stable, schema-checked shape (see `AGENTS.md`'s "Repository matrix" section), not scraped human output.
 
 Gradlezilla always derives the required JDK version from what your project itself declares — a
 Gradle daemon JVM criteria pin, toolchain declarations, bytecode targets, or your AGP version's
@@ -104,10 +103,19 @@ jobs:
 Parsing Gradle files with Regex (or hand-rolled AST parsing) is a fool's errand due to the complexity of the Kotlin DSL and version catalogs. So instead of re-implementing Gradle's own evaluation logic, Gradlezilla asks Gradle itself — via the [Tooling API](https://docs.gradle.org/current/userguide/tooling_api.html), the same mechanism Android Studio uses to sync a project.
 
 Gradlezilla uses a **Chain of Responsibility** of extractors:
-1. **Init-Script Extraction (primary path):** An init script hooks the target project's own Gradle evaluation and emits its exact AGP version, `compileSdk`, `buildToolsVersion`, `ndkVersion`, and toolchain/bytecode-target facts straight from the evaluated model — not a text-based guess.
+1. **Init-Script Extraction (primary path):** An init script hooks the target project's own Gradle evaluation and emits its exact AGP version, `compileSdk`, `buildToolsVersion`, and toolchain/bytecode-target facts straight from the evaluated model — not a text-based guess.
 2. **Version Catalog Fallback:** If that doesn't yield a usable AGP version, it falls back to parsing `gradle/libs.versions.toml` directly.
 3. **JDK Resolution:** The required JDK is derived from what the project declares — a Gradle daemon JVM criteria pin, toolchain declarations, bytecode targets, or the AGP minimum — never from whichever JVM happens to be running Gradlezilla itself.
 4. **Environment Generation:** These requirements are synthesized into a dynamic `sdkmanager` bash command that installs only what your project strictly requires — nothing more, nothing less.
+
+The NDK and CMake are part of that last step, but only when a module actually compiles native
+code — i.e. its evaluated build has `externalNativeBuild.cmake.path` or `.ndkBuild.path` set.
+Android Gradle Plugin stamps every project with a default `ndkVersion` whether or not it builds
+any native code, so that field alone is never evidence of anything; a prebuilt `.so` under
+`jniLibs` doesn't count either. Getting this right matters in practice, not just in principle: for
+a pure-Kotlin project like [Timber](https://github.com/JakeWharton/timber), installing an NDK
+unconditionally produced a 3.24 GB image — skipping it when nothing needs one drops that to
+943 MB.
 
 Running a real Gradle build sounds like it should be slow and flaky — daemon crashes, cache collisions, output that depends on whatever else is running on your machine. Gradlezilla avoids that by giving every invocation its own isolated Gradle user home and project cache directory, pinning the JDK explicitly instead of trusting the ambient one, and disabling Gradle's configuration cache for the extraction run so a stale cache entry can never silently skip extraction (see "Known Limitations" below).
 
@@ -151,18 +159,9 @@ runs against it reuse the cached distribution.
 CI users should cache the `GRADLEZILLA_GRADLE_HOME` directory between runs to avoid paying
 the warm-up cost on every job.
 
-The init script used for extraction (`extractor.gradle`) is *designed* to support Gradle back to
-5.0, matching the floor `GradleJdkCompatibility` assumes elsewhere in the codebase — but that
-floor is only checked by API-availability inspection, not by running a real Gradle 5.0
-distribution. What's actually exercised end-to-end against real distributions: the packaged
-`extractor.gradle` runs through TestKit against Gradle 8.0 (`InitScriptGradleVersionCompatTest`,
-pinning the exact line that regressed in #28), and the [Repository Matrix
-Test](.github/workflows/matrix-test.yaml) runs the full CLI against real Android repos on wrapper
-versions from 8.0 through 9.7.1. Treat 8.0 through 9.7 as the range Gradlezilla is actually
-tested against, not 5.0. Any API used in the script that's newer than Gradle 5.0 must still stay
-behind an explicit `GradleVersion.current() >= ...` guard with a fallback (or a no-op) for older
-versions; an unguarded newer API silently breaks extraction for every project on an older Gradle
-instead of failing a test.
+Gradlezilla is tested against Gradle 8.0 through 9.7.1 via the [Repository Matrix
+Test](.github/workflows/matrix-test.yaml) against real Android repos; older versions may work but
+aren't verified (see `AGENTS.md` for the contributor-facing detail on this range).
 
 The generated Dockerfile's base image (`eclipse-temurin:<jdk>-jdk-jammy`) is a floating tag, not
 a digest pin, and the `platform-tools` SDK package has no version you can pin at all — both can
