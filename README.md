@@ -44,22 +44,39 @@ Gradlezilla will analyze your `build.gradle` / `build.gradle.kts` files, infer t
   gradlezilla generate . --jdk 17
   ```
 
-## 🏗️ How to Test Your Generated Dockerfile
+## 🏗️ How to Use Your Generated Dockerfile
 
-Once generated, you can test the build environment locally to ensure it successfully compiles your APK:
+The generated image is a build **environment**, not a build artifact: it contains the
+pinned JDK and Android SDK packages your project needs, and nothing else. Your source
+code is never copied into the image — mount your repository in at `/workspace` and run
+Gradle there:
 
 ```bash
-# 1. Build the immutable container environment
-docker build -t my-android-app-builder .
+# 1. Build the environment image
+docker build -t my-android-env .
 
-# 2. Run the container to compile the app (e.g., Debug variant)
-docker run --name app-builder my-android-app-builder bash -c "./gradlew assembleDebug --no-daemon"
+# 2. Run Gradle inside it, against your mounted repository
+docker run --rm -v "$PWD:/workspace" my-android-env ./gradlew assembleDebug
+```
 
-# 3. Extract the finished APK back to your host machine
-docker cp app-builder:/workspace/app/build/outputs/apk/debug ./extracted-apks
+Because the repository is mounted rather than copied, the APK lands directly at
+`build/outputs/apk/debug` on your host — no `docker cp` needed. This also means the
+image is stable across source-only commits: it only changes when a base version (JDK,
+`compileSdk`, build tools, NDK) changes, so it's a good fit for caching in CI.
 
-# 4. Clean up
-docker rm app-builder
+### GitHub Actions
+
+Use the image directly as the job's `container` — the mount is implicit, since the repo
+is already checked out into the workspace:
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/your-org/my-android-env:latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: ./gradlew assembleDebug --no-daemon
 ```
 
 ## 🧠 How it Works (Under the Hood)

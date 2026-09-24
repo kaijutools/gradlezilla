@@ -39,10 +39,10 @@ class DockerfileGeneratorTest {
     }
 
     @Test
-    fun `env sets PATH with cmdline-tools only`() {
+    fun `env sets PATH with cmdline-tools and platform-tools`() {
         val output = render()
         assertTrue(output.contains("cmdline-tools/latest/bin"))
-        assertFalse(output.contains("platform-tools"))
+        assertTrue(output.contains("${'$'}{ANDROID_HOME}/platform-tools"))
     }
 
     // ── L2: cmdline-tools ─────────────────────────────────────────────────
@@ -72,6 +72,11 @@ class DockerfileGeneratorTest {
     }
 
     @Test
+    fun `sdk packages include platform-tools so builds never download it`() {
+        assertTrue(render().contains("\"platform-tools\""))
+    }
+
+    @Test
     fun `sdk packages include build-tools for androidBuildToolsVersion`() {
         assertTrue(render().contains("build-tools;34.0.5"))
     }
@@ -93,15 +98,22 @@ class DockerfileGeneratorTest {
         assertFalse(render().contains("ndk;"))
     }
 
-    // ── L4: MVP Flat Execution ────────────────────────────────────────────
+    // ── L4: Build environment, not a build execution ────────────────────────
 
     @Test
-    fun `build execution uses flat copy`() {
-        assertTrue(render().contains("COPY . ."))
+    fun `sets workspace mount point`() {
+        assertTrue(render().contains("WORKDIR /workspace"))
     }
 
     @Test
-    fun `build execution uses default assembleRelease command`() {
-        assertTrue(render().contains("CMD [\"bash\", \"-c\", \"./gradlew assembleRelease --no-daemon\"]"))
+    fun `does not copy or add project content`() {
+        val output = render()
+        assertFalse(output.contains("COPY"))
+        assertFalse(output.contains("ADD "))
+    }
+
+    @Test
+    fun `does not run project build commands`() {
+        assertFalse(render().contains("CMD [\""))
     }
 }

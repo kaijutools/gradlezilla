@@ -10,6 +10,7 @@ internal object AndroidSdkPackages {
     fun render(spec: AndroidProjectSpec): String =
         buildList {
             add("\"platforms;android-${spec.androidSdkVersion}\"")
+            add("\"platform-tools\"")
             add("\"build-tools;${spec.androidBuildToolsVersion ?: DEFAULT_BUILD_TOOLS_VERSION}\"")
             spec.androidNdkVersion?.let { add("\"ndk;$it\"") }
         }.joinToString(" ")
