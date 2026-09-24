@@ -39,11 +39,6 @@ Gradlezilla will analyze your `build.gradle` / `build.gradle.kts` files, infer t
   gradlezilla generate . -d
   ```
 
-* **Layered Builds:** Generate a multi-layer Dockerfile that resolves Gradle dependencies in a cacheable layer separate from your application source, so source-only edits don't invalidate the dependency layer:
-  ```bash
-  gradlezilla generate . --layered
-  ```
-
 * **Machine-Readable Output:** For CI pipelines and other tooling, emit `json` or `sarif` instead of the human-readable summary:
   ```bash
   gradlezilla generate . --dry-run --format json
@@ -71,11 +66,16 @@ code is never copied into the image — mount your repository in at `/workspace`
 Gradle there:
 
 ```bash
-# 1. Build the environment image
-docker build -t my-android-env .
+# 1. Build the environment image — the Dockerfile needs no build context (nothing
+#    is COPYed in), so build it from stdin and skip sending your repo as context
+docker build -t my-android-env - < Dockerfile
 
-# 2. Run Gradle inside it, against your mounted repository
-docker run --rm -v "$PWD:/workspace" my-android-env ./gradlew assembleDebug
+# 2. Run Gradle inside it, against your mounted repository. Mount a named volume
+#    for the Gradle cache too, so dependency downloads survive between runs.
+docker run --rm \
+  -v "$PWD:/workspace" \
+  -v gradlezilla-cache:/root/.gradle \
+  my-android-env ./gradlew assembleDebug
 ```
 
 Because the repository is mounted rather than copied, the APK lands directly at
@@ -110,6 +110,13 @@ Gradlezilla uses a **Chain of Responsibility** of extractors:
 
 Running a real Gradle build sounds like it should be slow and flaky — daemon crashes, cache collisions, output that depends on whatever else is running on your machine. Gradlezilla avoids that by giving every invocation its own isolated Gradle user home and project cache directory, pinning the JDK explicitly instead of trusting the ambient one, and disabling Gradle's configuration cache for the extraction run so a stale cache entry can never silently skip extraction (see "Known Limitations" below).
 
+**Determinism contract:** the same repository commit, extracted with the same Gradlezilla
+version, produces an identical spec on the same machine, run after run. Across different
+machines, the spec is identical once you exclude `extractionMetadata` — that block records
+machine-specific facts (Gradle user home path, project cache dir, resolved daemon JDK path) by
+design, so it's expected to differ from one machine to the next even when everything else about
+the extraction agrees.
+
 ## 📊 Matrix Test Status
 
 Results from the latest [Repository Matrix Test](.github/workflows/matrix-test.yaml) run on `main`.
@@ -140,14 +147,39 @@ runs against it reuse the cached distribution.
 CI users should cache the `GRADLEZILLA_GRADLE_HOME` directory between runs to avoid paying
 the warm-up cost on every job.
 
-The init script used for extraction (`extractor.gradle`) targets Gradle 5.0 as its minimum
-supported version, matching the floor `GradleJdkCompatibility` already assumes elsewhere in the
-codebase. This is verified empirically (not just by API-availability inspection) against a real
-Gradle 5.0 distribution as part of the test suite — see `InitScriptGradleVersionCompatTest`. Any
-API used in the script that's newer than Gradle 5.0 must stay behind an explicit
-`GradleVersion.current() >= ...` guard with a fallback (or a no-op) for older versions; an
-unguarded newer API silently breaks extraction for every project on an older Gradle instead of
-failing a test.
+Gradlezilla has been tested against Gradle 8.0 through 9.7 — the range actually exercised by
+the test suite (`InitScriptGradleVersionCompatTest` runs the packaged `extractor.gradle` against
+a real Gradle 8.0 distribution) and the Repository Matrix Test results above.
+`GradleJdkCompatibility`'s compatibility table assumes a floor of Gradle 5.0, but that floor is
+untested — treat anything below 8.0 as unverified, not supported.
+
+* **Floating base image tag:** the generated Dockerfile is pinned to `eclipse-temurin:<jdk>-jdk-jammy`,
+  a tag that receives rolling updates — not a digest. Two builds on different days can pull a
+  different underlying image even with an identical generated Dockerfile.
+* **Unpinnable `platform-tools`:** the generated `sdkmanager` invocation installs `platform-tools`
+  with no version pin (there's no per-project signal to pin it to), so it always resolves to
+  whatever is latest at build time.
+* **`local.properties` is visible through the mount:** since your repository is bind-mounted
+  rather than copied, a host-checked-out `local.properties` with its own `sdk.dir` is visible
+  inside the container too, pointing at a path that only exists on your host. AGP prefers
+  `sdk.dir` over `ANDROID_HOME` when both are present, so a stale `local.properties` can break
+  the build inside the container — delete it from the mount or don't check it in.
+* **Daemon memory settings aren't baked in:** `kotlin.daemon.jvmargs`, `org.gradle.jvmargs`, and
+  similar settings typically live in your own `~/.gradle/gradle.properties`, not the project, so
+  the generated image has no opinion on them. Pass them with `-P`, or mount your
+  `gradle.properties` into the container's Gradle user home.
+* **Root-owned outputs on Linux:** the generated image has no `USER` instruction, so `docker run`
+  executes as root by default — files Gradle writes back into your bind-mounted repository (build
+  outputs, `.gradle/`) end up root-owned on the host. Run with `--user "$(id -u):$(id -g)"` and
+  point `GRADLE_USER_HOME` at a directory that UID can write to.
+* **Don't share one Gradle cache volume between concurrent containers:** a shared
+  `GRADLE_USER_HOME` (e.g. a single named volume mounted by multiple containers at once) can hit
+  Gradle's own cache locking across independent daemons. Give concurrent builds their own volume.
+* **Windows JDK discovery is best-effort:** unlike macOS (`/usr/libexec/java_home -V`) or Linux
+  (`/usr/lib/jvm`, `/usr/java`, `/opt`), Windows has no equivalent system-wide JDK registry, so
+  discovery only checks `C:\Program Files\Java`, `C:\Program Files\Eclipse Adoptium`, and
+  `%LOCALAPPDATA%\Programs`. A JDK installed somewhere else won't be found automatically — pass
+  it explicitly with `--daemon-jdk`.
 
 ## 🤝 Contributing
 
