@@ -39,10 +39,10 @@ class DockerfileGeneratorTest {
     }
 
     @Test
-    fun `env sets PATH with cmdline-tools only`() {
+    fun `env sets PATH with cmdline-tools and platform-tools`() {
         val output = render()
         assertTrue(output.contains("cmdline-tools/latest/bin"))
-        assertFalse(output.contains("platform-tools"))
+        assertTrue(output.contains("${'$'}{ANDROID_HOME}/platform-tools"))
     }
 
     // ── L2: cmdline-tools ─────────────────────────────────────────────────
@@ -69,6 +69,11 @@ class DockerfileGeneratorTest {
     @Test
     fun `sdk packages include platforms for androidSdkVersion`() {
         assertTrue(render().contains("platforms;android-34"))
+    }
+
+    @Test
+    fun `sdk packages include platform-tools so builds never download it`() {
+        assertTrue(render().contains("\"platform-tools\""))
     }
 
     @Test

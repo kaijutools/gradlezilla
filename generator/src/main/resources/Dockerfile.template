@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
 
 # Set up Android SDK environment variables
 ENV ANDROID_HOME=/opt/android-sdk
-ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin
+ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools
 
 # Download and install Android Command Line Tools
 RUN mkdir -p ${ANDROID_HOME}/cmdline-tools && \
