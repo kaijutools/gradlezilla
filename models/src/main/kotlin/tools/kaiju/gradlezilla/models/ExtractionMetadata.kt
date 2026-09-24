@@ -10,4 +10,5 @@ data class ExtractionMetadata(
     val daemonJdkSource: String,
     val jdkVersionSource: String,
     val jdkVersionWarnings: List<String> = emptyList(),
+    val nativeBuildWarnings: List<String> = emptyList(),
 )

@@ -35,19 +35,50 @@ def emit = { project ->
     def buildTools = androidExt.hasProperty('buildToolsVersion') ? androidExt.buildToolsVersion : null
     def ndkVersion = androidExt.hasProperty('ndkVersion') ? androidExt.ndkVersion : null
 
+    // Whether this module actually *compiles* native code, which is the only thing that makes the
+    // NDK a real requirement. AGP populates android.ndkVersion with its own bundled default on
+    // every project, native or not, so that field alone is not evidence — reading it as evidence
+    // is what pulled a ~1GB NDK into images for repos with no native sources at all.
+    //
+    // externalNativeBuild.cmake.path / .ndkBuild.path is the signal: it is set only when the build
+    // points AGP at a CMakeLists.txt or Android.mk to build. Read off the evaluated extension, not
+    // build-file text, so modules configured by convention plugins in build-logic are covered.
+    // Deliberately ignored: jniLibs prebuilts, defaultConfig.ndk.abiFilters, and native libs inside
+    // consumed AARs — AGP only strips those, and merely warns when no NDK is installed.
+    def nativeBuild = null
+    def cmakeVersion = null
+    try {
+        def enb = androidExt.externalNativeBuild
+        def kinds = []
+        if (enb?.cmake?.path != null) kinds << 'cmake'
+        if (enb?.ndkBuild?.path != null) kinds << 'ndkBuild'
+        if (!kinds.isEmpty()) nativeBuild = kinds.join('+')
+        cmakeVersion = enb?.cmake?.version
+    } catch (Throwable ignored) {
+        // No externalNativeBuild on this AGP's extension — treat as "not native" rather than
+        // guessing, which is the same conclusion for every AGP that lacks the block.
+    }
+
     def agpVersion = null
+    def defaultCmake = null
     try {
         // androidExt (not project) so the lookup happens on AGP's own plugin classloader —
         // project.class.classLoader is Gradle core's, which never sees AGP's classes.
-        agpVersion = androidExt.class.classLoader.loadClass('com.android.Version')
+        def agpClassLoader = androidExt.class.classLoader
+        agpVersion = agpClassLoader.loadClass('com.android.Version')
                 .getField('ANDROID_GRADLE_PLUGIN_VERSION').get(null)
+        // The CMake version AGP falls back to when a cmake module pins none. Read from AGP itself
+        // so a future AGP that moves its default needs no change here; NativeBuildResolver carries
+        // the documented constant for when this internal class is not reachable.
+        defaultCmake = agpClassLoader.loadClass('com.android.build.gradle.internal.cxx.configure.CMakeVersion')
+                .getField('DEFAULT').get(null).sdkFolderName
     } catch (Throwable ignored) {
         // AGP not resolvable this way — leave null, AGP-minimum-JDK fallback simply won't
         // have a version to work with for this project.
     }
 
     // {{PREFIX}} will be replaced at runtime
-    println "{{PREFIX}}compileSdk=${compileSdk}::buildTools=${buildTools}::ndk=${ndkVersion}::agpVersion=${agpVersion}"
+    println "{{PREFIX}}path=${project.path}::compileSdk=${compileSdk}::buildTools=${buildTools}::ndk=${ndkVersion}::agpVersion=${agpVersion}::nativeBuild=${nativeBuild}::cmakeVersion=${cmakeVersion}::defaultCmake=${defaultCmake}"
 }
 
 // Runs for every project, Android or not — a plain Kotlin/Java module can still pin a JDK

@@ -98,6 +98,34 @@ class DockerfileGeneratorTest {
         assertFalse(render().contains("ndk;"))
     }
 
+    @Test
+    fun `sdk packages include cmake when androidCmakeVersion is set`() {
+        val output = render(baseSpec.copy(androidNdkVersion = "26.1.10909125", androidCmakeVersion = "3.22.1"))
+        assertTrue(output.contains("cmake;3.22.1"))
+    }
+
+    @Test
+    fun `a project with no native build installs neither ndk nor cmake`() {
+        val output = render()
+        assertFalse(output.contains("ndk;"))
+        assertFalse(output.contains("cmake;"))
+    }
+
+    @Test
+    fun `a cmake module installs both ndk and cmake`() {
+        val output = render(baseSpec.copy(androidNdkVersion = "26.1.10909125", androidCmakeVersion = "3.22.1"))
+        assertTrue(output.contains("ndk;26.1.10909125"))
+        assertTrue(output.contains("cmake;3.22.1"))
+    }
+
+    @Test
+    fun `an ndkBuild module installs ndk only`() {
+        // ndkBuild needs no cmake package, so the resolver leaves androidCmakeVersion null.
+        val output = render(baseSpec.copy(androidNdkVersion = "26.1.10909125"))
+        assertTrue(output.contains("ndk;26.1.10909125"))
+        assertFalse(output.contains("cmake;"))
+    }
+
     // ── L4: Build environment, not a build execution ────────────────────────
 
     @Test

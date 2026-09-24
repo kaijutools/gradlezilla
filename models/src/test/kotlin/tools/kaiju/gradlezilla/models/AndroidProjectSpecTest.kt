@@ -97,6 +97,7 @@ class AndroidProjectSpecTest {
                         daemonJdkSource = "systemPath",
                         jdkVersionSource = "agpMinimum",
                         jdkVersionWarnings = listOf("some warning"),
+                        nativeBuildWarnings = listOf("some native warning"),
                     ),
             )
 

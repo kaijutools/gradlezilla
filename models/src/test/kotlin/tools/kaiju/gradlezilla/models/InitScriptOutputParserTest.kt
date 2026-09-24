@@ -3,11 +3,14 @@ package tools.kaiju.gradlezilla.models
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 class InitScriptOutputParserTest {
     @Test
     fun `parses a normal data line`() {
-        val output = "GRADLEZILLA_AGP_DATA::compileSdk=34::buildTools=34.0.0::ndk=25.1.8937393"
+        val output =
+            "GRADLEZILLA_AGP_DATA::path=:app::compileSdk=34::buildTools=34.0.0::ndk=25.1.8937393" +
+                "::nativeBuild=ndkBuild"
         val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
 
         assertEquals(
@@ -17,8 +20,42 @@ class InitScriptOutputParserTest {
     }
 
     @Test
+    fun `drops AGP's reported ndkVersion when no module configures externalNativeBuild`() {
+        // AGP fills android.ndkVersion in with its bundled default on every project, so the value
+        // being present says nothing about whether the build actually needs an NDK.
+        val output = "GRADLEZILLA_AGP_DATA::path=:app::compileSdk=34::buildTools=34.0.0::ndk=25.1.8937393"
+        val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
+
+        assertNull(result.data.ndkVersion)
+        assertNull(result.data.cmakeVersion)
+    }
+
+    @Test
+    fun `resolves native config across modules, not just the first line`() {
+        val output =
+            "GRADLEZILLA_AGP_DATA::path=:app::compileSdk=34::ndk=25.1.8937393\n" +
+                "GRADLEZILLA_AGP_DATA::path=:native::compileSdk=34::ndk=26.1.10909125" +
+                "::nativeBuild=cmake::cmakeVersion=3.22.1"
+        val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
+
+        assertEquals("26.1.10909125", result.data.ndkVersion)
+        assertEquals("3.22.1", result.data.cmakeVersion)
+    }
+
+    @Test
+    fun `falls back to AGP's own default cmake version reported by the init script`() {
+        val output =
+            "GRADLEZILLA_AGP_DATA::path=:native::compileSdk=34::ndk=26.1.10909125" +
+                "::nativeBuild=cmake::defaultCmake=3.30.5"
+        val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
+
+        assertEquals("3.30.5", result.data.cmakeVersion)
+    }
+
+    @Test
     fun `preserves everything after the first equals sign in a value`() {
-        val output = "GRADLEZILLA_AGP_DATA::compileSdk=34::buildTools=34.0.0::ndk=side=car"
+        val output =
+            "GRADLEZILLA_AGP_DATA::path=:app::compileSdk=34::buildTools=34.0.0::nativeBuild=ndkBuild::ndk=side=car"
         val result = assertIs<InitScriptOutputParser.ParseOutcome.Success>(InitScriptOutputParser.parse(output))
 
         assertEquals("side=car", result.data.ndkVersion)
