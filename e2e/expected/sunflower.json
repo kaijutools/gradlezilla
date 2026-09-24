@@ -11,6 +11,8 @@
     "androidSdkVersion": { "value": 33, "source": "gradle/libs.versions.toml: compileSdk = \"33\"" },
     "androidBuildToolsVersion": { "value": "30.0.3", "source": "verified run: not set anywhere in build.gradle.kts files; this is AGP 8.0.2's own default build-tools version, confirmed identical whether or not any build-tools package is actually installed on the machine" },
     "moduleCount": { "value": 2, "source": "settings.gradle.kts: include(\":app\"), include(\":macrobenchmark\") — no multi-segment includes, so no implicit parent projects; confirmed by verified run" },
-    "ndkPresent": { "value": false, "source": "verified run: androidNdkVersion is absent (null) — AGP 8.0.2 (unlike AGP 9.x, see now-in-android.json/timber.json/wikipedia.json) does not auto-resolve a default NDK version when android.ndkVersion is unset, and this project has no native code (no externalNativeBuild/CMakeLists.txt) to set it explicitly" }
+    "ndkPresent": { "value": false, "source": "no externalNativeBuild configured — no externalNativeBuild.cmake.path or ndkBuild.path on any module, and no CMakeLists.txt / Android.mk anywhere in the tree" },
+    "androidNdkVersion": { "value": null, "source": "not emitted: no module compiles native code. This field was null here before #38 too, but for an unrelated reason — AGP 8.0.2 did not populate its own bundled android.ndkVersion default the way AGP 9.x does" },
+    "androidCmakeVersion": { "value": null, "source": "not emitted: no module uses externalNativeBuild.cmake" }
   }
 }

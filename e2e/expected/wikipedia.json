@@ -11,6 +11,8 @@
     "androidSdkVersion": { "value": 37, "source": "app/build.gradle: compileSdk = 37" },
     "androidBuildToolsVersion": { "value": "36.0.0", "source": "verified run: not set anywhere in build.gradle files; this is AGP 9.4.1's own default build-tools version (same default observed for Timber's AGP 9.4.0 and Now In Android's AGP 9.3.2 — the AGP 9.x line's default tracks its own release train, not the project's compileSdk of 37)" },
     "moduleCount": { "value": 3, "source": "settings.gradle.kts explicitly includes only \":app\" and \":analytics:testkitchen\", but Gradle auto-creates \":analytics\" as an implicit parent project for the multi-segment path — confirmed by verified run (modules array: :analytics, :analytics:testkitchen, :app)" },
-    "ndkPresent": { "value": true, "source": "verified run: androidNdkVersion=\"28.2.13676358\" — AGP 9.x auto-resolves a default NDK version even though this project has zero native code (no externalNativeBuild/CMakeLists.txt anywhere); same AGP-version-dependent behavior seen for Timber and Now In Android" }
+    "ndkPresent": { "value": false, "source": "no externalNativeBuild configured — no externalNativeBuild.cmake.path or ndkBuild.path on any module, and no CMakeLists.txt / Android.mk anywhere in the tree" },
+    "androidNdkVersion": { "value": null, "source": "not emitted. AGP populates android.ndkVersion with its own bundled default on every project, native or not, so that field was never evidence of native code — an earlier revision of this file expected \"28.2.13676358\" here for exactly that reason. Since #38 gradlezilla emits an NDK only for modules that actually compile native code" },
+    "androidCmakeVersion": { "value": null, "source": "not emitted: no module uses externalNativeBuild.cmake" }
   }
 }

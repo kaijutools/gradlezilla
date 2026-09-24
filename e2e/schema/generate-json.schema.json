@@ -1,5 +1,5 @@
 {
-  "_comment": "Hand-written snapshot of `gradlezilla generate --format json`'s field names and types, sourced from the Kotlin models on 2026-09-22 (models/src/main/kotlin/tools/kaiju/gradlezilla/models/{AndroidProjectSpec,ModuleSpec,ExtractionMetadata}.kt and cli/.../format/GenerateFormatter.kt's GenerateOutput envelope). kotlinx.serialization omits a field from the JSON entirely whenever its runtime value equals its Kotlin default (confirmed empirically: androidNdkVersion/androidCmakeVersion/gradleJvmArgs/hasBuildSrc/hasBuildLogic are routinely absent, and even androidBuildToolsVersion or extractionMetadata.jdkVersionWarnings can be), so 'required' below lists only fields with NO Kotlin default (always serialized) or with @EncodeDefault(ALWAYS) (jdkVersion) — everything else is 'optional' and legitimately absent depending on the project. e2e/verify-extraction.sh fails if a live run has a key outside required+optional (an unknown/renamed field) or is missing a required key (e.g. jdkVersion silently disappearing, the historical bug this guard exists for). Regenerate deliberately (by hand, from the source) whenever a field is added/removed/renamed/changes default-ness, and note the change in the same PR — that pairing is the whole point of this guard: it turns an accidental drop into a merge conflict instead of a silent regression.",
+  "_comment": "Hand-written snapshot of `gradlezilla generate --format json`'s field names and types, sourced from the Kotlin models on 2026-09-24 (models/src/main/kotlin/tools/kaiju/gradlezilla/models/{AndroidProjectSpec,ModuleSpec,ExtractionMetadata}.kt and cli/.../format/GenerateFormatter.kt's GenerateOutput envelope) and cross-checked against a live run. kotlinx.serialization omits a field from the JSON entirely whenever its runtime value equals its Kotlin default (confirmed empirically: androidNdkVersion/androidCmakeVersion/gradleJvmArgs/hasBuildSrc/hasBuildLogic are routinely absent, and even androidBuildToolsVersion or extractionMetadata.jdkVersionWarnings can be), so 'required' below lists only fields with NO Kotlin default (always serialized) or with @EncodeDefault(ALWAYS) (jdkVersion) — everything else is 'optional' and legitimately absent depending on the project. Classification follows the Kotlin default, not observed frequency: extractionMetadata.extractionArgs has a default of emptyList() so it is 'optional' here, even though a successful extraction always populates it; nativeBuildWarnings and jdkVersionWarnings are likewise optional and appear only when a warning is actually raised. e2e/verify-extraction.sh fails if a live run has a key outside required+optional (an unknown/renamed field) or is missing a required key (e.g. jdkVersion silently disappearing, the historical bug this guard exists for). Regenerate deliberately (by hand, from the source) whenever a field is added/removed/renamed/changes default-ness, and note the change in the same PR — that pairing is the whole point of this guard: it turns an accidental drop into a merge conflict instead of a silent regression.",
   "envelope": {
     "required": { "spec": "AndroidProjectSpec", "dockerfile": "string", "outputPath": "string|null" },
     "optional": {}
@@ -31,6 +31,10 @@
       "daemonJdkSource": "string",
       "jdkVersionSource": "string"
     },
-    "optional": { "jdkVersionWarnings": "array<string>" }
+    "optional": {
+      "jdkVersionWarnings": "array<string>",
+      "nativeBuildWarnings": "array<string>",
+      "extractionArgs": "array<string>"
+    }
   }
 }

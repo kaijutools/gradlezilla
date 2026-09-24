@@ -51,6 +51,17 @@ jobs:
               url: "https://github.com/wikimedia/apps-android-wikipedia.git",
               sha: "de13f265ebed061d0ccc0030c2ea3d345a35b31a",
             }
+          # The corpus's only positive NDK case — every other repo here builds no native code, so
+          # without this one the NDK/CMake path would only ever be asserted absent. Extracted at
+          # the repository root, so all 44 projects resolve in one pass. Both versions come from
+          # build-logic convention plugins, not module build files — the case build-file text
+          # parsing would miss.
+          - {
+              name: "NDK Samples",
+              slug: "ndk-samples",
+              url: "https://github.com/android/ndk-samples.git",
+              sha: "988d73bed0fd3dd362d8041a34f958be76769773",
+            }
 
     steps:
       - name: Checkout Gradlezilla
@@ -131,7 +142,7 @@ jobs:
           for i in 1 2; do
             SECONDS=0
             cli/build/install/gradlezilla/bin/gradlezilla generate "$PWD/target-repo" \
-              --dry-run --format json >"run$i.json" 2>"run$i.stderr"
+              --dry-run --format json >"run$i.json" 2>"run$i.stderr" </dev/null
             run_status=$?
             elapsed_s=$SECONDS
             if [[ $i -eq 1 ]]; then echo "extraction_time_s=$elapsed_s" >>"$GITHUB_OUTPUT"; fi
@@ -140,6 +151,16 @@ jobs:
               cat "run$i.stderr"
               ok=false
             fi
+            # Entry count of gradlezilla's own isolated project-cache dir, read back from the run
+            # that just produced it. Pre-#39 this grew by one configuration-cache entry per
+            # invocation; it must now stay flat across the two runs.
+            pc_dir=$(jq -r '.spec.extractionMetadata.projectCacheDir // empty' "run$i.json" 2>/dev/null)
+            if [[ -n "$pc_dir" && -d "$pc_dir" ]]; then
+              find "$pc_dir" -mindepth 1 | wc -l | tr -d ' ' >"pc-count-$i.txt"
+            else
+              echo 0 >"pc-count-$i.txt"
+            fi
+            echo "project-cache entries after run $i: $(cat "pc-count-$i.txt")"
           done
           echo "extraction_ok=$ok" >>"$GITHUB_OUTPUT"
 
@@ -157,7 +178,9 @@ jobs:
             target-repo \
             cc-before.sha256 \
             "${{ steps.extract.outputs.extraction_time_s }}" \
-            "result-${{ strategy.job-index }}.md"; then
+            "result-${{ strategy.job-index }}.md" \
+            "$(cat pc-count-1.txt 2>/dev/null || echo 0)" \
+            "$(cat pc-count-2.txt 2>/dev/null || echo 0)"; then
             echo "status=✅ Passed" >>"$GITHUB_OUTPUT"
           else
             echo "status=❌ Failed" >>"$GITHUB_OUTPUT"
